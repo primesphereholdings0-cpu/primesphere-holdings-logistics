@@ -24,9 +24,11 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
 
   const nav = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/vehicles", label: "Vehicles", icon: Truck },
     { to: "/drivers", label: "Drivers", icon: Users },
     { to: "/voucher", label: "Driver Voucher", icon: Smartphone },
   ];
+
 
   return (
     <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-xl">

@@ -230,3 +230,42 @@ export const driverDetailQuery = (driverId: string) =>
       };
     },
   });
+
+export type VehicleRow = Vehicle & {
+  active_trips: number;
+  total_trips: number;
+  total_km: number;
+  revenue_tzs: number;
+};
+
+export const vehiclesOverviewQuery = queryOptions({
+  queryKey: ["vehicles", "overview"],
+  queryFn: async (): Promise<VehicleRow[]> => {
+    const [{ data: vehicles, error }, { data: trips }, { data: fins }] = await Promise.all([
+      supabase.from("vehicles").select("*").order("reg_number"),
+      supabase.from("trips").select("id, vehicle_id, status, planned_km"),
+      supabase.from("trip_financials").select("trip_id, total_contract_tzs, contract_amount, fx_exchange_rate"),
+    ]);
+    if (error) throw error;
+    const finMap = new Map(
+      (fins ?? []).map((f) => [
+        f.trip_id,
+        Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)),
+      ]),
+    );
+    return (vehicles ?? []).map((v) => {
+      const vtrips = (trips ?? []).filter((t) => t.vehicle_id === v.id);
+      const active = vtrips.filter((t) => t.status === "In-Transit" || t.status === "Dispatched").length;
+      const km = vtrips.reduce((s, t) => s + Number(t.planned_km ?? 0), 0);
+      const rev = vtrips.reduce((s, t) => s + (finMap.get(t.id) ?? 0), 0);
+      return {
+        ...(v as Vehicle),
+        active_trips: active,
+        total_trips: vtrips.length,
+        total_km: km,
+        revenue_tzs: rev,
+      };
+    });
+  },
+});
+
