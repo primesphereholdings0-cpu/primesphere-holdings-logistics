@@ -14,26 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      driver_payments: {
+        Row: {
+          amount_tzs: number
+          created_at: string
+          driver_id: string
+          id: string
+          notes: string | null
+          payment_date: string
+          payment_type: string
+          period_label: string | null
+          reference_trip: string | null
+        }
+        Insert: {
+          amount_tzs?: number
+          created_at?: string
+          driver_id: string
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_type?: string
+          period_label?: string | null
+          reference_trip?: string | null
+        }
+        Update: {
+          amount_tzs?: number
+          created_at?: string
+          driver_id?: string
+          id?: string
+          notes?: string | null
+          payment_date?: string
+          payment_type?: string
+          period_label?: string | null
+          reference_trip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_payments_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_payments_reference_trip_fkey"
+            columns: ["reference_trip"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
+          base_location: string | null
           created_at: string
           full_name: string
           id: string
           license_number: string | null
+          monthly_salary_tzs: number
           phone: string | null
         }
         Insert: {
+          base_location?: string | null
           created_at?: string
           full_name: string
           id?: string
           license_number?: string | null
+          monthly_salary_tzs?: number
           phone?: string | null
         }
         Update: {
+          base_location?: string | null
           created_at?: string
           full_name?: string
           id?: string
           license_number?: string | null
+          monthly_salary_tzs?: number
           phone?: string | null
         }
         Relationships: []
