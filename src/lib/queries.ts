@@ -269,3 +269,38 @@ export const vehiclesOverviewQuery = queryOptions({
   },
 });
 
+export type ExpenseRow = TripExpense & {
+  trip_code: string;
+  origin_destination: string;
+  driver_name: string | null;
+  vehicle_reg: string | null;
+};
+
+export const expensesQuery = queryOptions({
+  queryKey: ["expenses", "all"],
+  queryFn: async (): Promise<ExpenseRow[]> => {
+    const [{ data: exps, error }, { data: trips }, { data: drivers }, { data: vehicles }] =
+      await Promise.all([
+        supabase.from("trip_expenses").select("*").order("created_at", { ascending: false }),
+        supabase.from("trips").select("id, trip_code, origin_destination, driver_id, vehicle_id"),
+        supabase.from("drivers").select("id, full_name"),
+        supabase.from("vehicles").select("id, reg_number"),
+      ]);
+    if (error) throw error;
+    const tMap = new Map((trips ?? []).map((t) => [t.id, t]));
+    const dMap = new Map((drivers ?? []).map((d) => [d.id, d.full_name]));
+    const vMap = new Map((vehicles ?? []).map((v) => [v.id, v.reg_number]));
+    return (exps ?? []).map((e) => {
+      const t = tMap.get(e.trip_id);
+      return {
+        ...(e as TripExpense),
+        trip_code: t?.trip_code ?? "—",
+        origin_destination: t?.origin_destination ?? "—",
+        driver_name: t?.driver_id ? dMap.get(t.driver_id) ?? null : null,
+        vehicle_reg: t?.vehicle_id ? vMap.get(t.vehicle_id) ?? null : null,
+      };
+    });
+  },
+});
+
+
