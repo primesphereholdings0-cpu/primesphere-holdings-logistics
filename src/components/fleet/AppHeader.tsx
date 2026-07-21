@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Truck, LayoutDashboard, Smartphone, Moon, Sun } from "lucide-react";
+import { Truck, LayoutDashboard, Smartphone, Moon, Sun, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
