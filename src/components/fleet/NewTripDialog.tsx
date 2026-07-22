@@ -74,6 +74,8 @@ export function NewTripDialog() {
           origin_destination: route,
           vehicle_id: vehicleId || null,
           driver_id: driverId || null,
+          customer_id: customerId || null,
+          contract_id: contractId || null,
           planned_km: Number(plannedKm || 0),
           dispatch_date: new Date().toISOString().slice(0, 10),
           status: "Dispatched",
