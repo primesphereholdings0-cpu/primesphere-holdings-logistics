@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Search, MoreHorizontal, Eye, FileCheck, Pencil, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/fleet/AppHeader";
+
 import { NewTripDialog } from "@/components/fleet/NewTripDialog";
 import { StatusBadge } from "@/components/fleet/StatusBadge";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/trips/")({
   component: TripsPage,
   head: () => ({
     meta: [
-      { title: "Trips — FleetPulse" },
+      { title: "Trips — Primesphere Holdings Logistics" },
       { name: "description", content: "Manage every trip from dispatch to audit and settlement." },
     ],
   }),
@@ -67,17 +67,26 @@ function TripsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader right={<NewTripDialog />} />
-      <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">Trips</h1>
-          <p className="text-sm text-muted-foreground">Search, filter and progress trips through the dispatch lifecycle.</p>
+      {/* Page header */}
+      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Trips</h1>
+          <p className="text-xs text-muted-foreground">Manage every trip from dispatch to audit and settlement.</p>
         </div>
+        <NewTripDialog />
+      </div>
 
+      <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
+        {/* Search and filter bar */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search trip code, route, driver, vehicle…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
+            <Input
+              placeholder="Search trip code, route, driver, vehicle…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-9"
+            />
           </div>
           <Tabs value={status} onValueChange={setStatus}>
             <TabsList>
