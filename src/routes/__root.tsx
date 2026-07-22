@@ -119,12 +119,50 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useRouterState } from "@tanstack/react-router";
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
+      <AuthGate>
+        <Outlet />
+      </AuthGate>
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );
+}
+
+function AuthGate({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const router = useRouter();
+  const [state, setState] = useState<"loading" | "in" | "out">("loading");
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setState(data.session ? "in" : "out");
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setState(session ? "in" : "out");
+      if (!session && pathname !== "/auth") router.navigate({ to: "/auth" });
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [pathname, router]);
+
+  if (pathname === "/auth") return <>{children}</>;
+  if (state === "loading") {
+    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</div>;
+  }
+  if (state === "out") {
+    if (typeof window !== "undefined") router.navigate({ to: "/auth" });
+    return null;
+  }
+  return <>{children}</>;
 }

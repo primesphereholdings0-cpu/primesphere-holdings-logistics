@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VoucherRouteImport } from './routes/voucher'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VehiclesIndexRouteImport } from './routes/vehicles.index'
 import { Route as TripsIndexRouteImport } from './routes/trips.index'
@@ -22,10 +23,16 @@ import { Route as TripsTripIdRouteImport } from './routes/trips.$tripId'
 import { Route as DriversDriverIdRouteImport } from './routes/drivers.$driverId'
 import { Route as CustomersCustomerIdRouteImport } from './routes/customers.$customerId'
 import { Route as TripsTripIdAuditRouteImport } from './routes/trips.$tripId.audit'
+import { Route as ApiPublicBootstrapUserRouteImport } from './routes/api/public/bootstrap-user'
 
 const VoucherRoute = VoucherRouteImport.update({
   id: '/voucher',
   path: '/voucher',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -88,9 +95,15 @@ const TripsTripIdAuditRoute = TripsTripIdAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => TripsTripIdRoute,
 } as any)
+const ApiPublicBootstrapUserRoute = ApiPublicBootstrapUserRouteImport.update({
+  id: '/api/public/bootstrap-user',
+  path: '/api/public/bootstrap-user',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/voucher': typeof VoucherRoute
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/drivers/$driverId': typeof DriversDriverIdRoute
@@ -102,10 +115,12 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof SettingsIndexRoute
   '/trips/': typeof TripsIndexRoute
   '/vehicles/': typeof VehiclesIndexRoute
+  '/api/public/bootstrap-user': typeof ApiPublicBootstrapUserRoute
   '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/voucher': typeof VoucherRoute
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/drivers/$driverId': typeof DriversDriverIdRoute
@@ -117,11 +132,13 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsIndexRoute
   '/trips': typeof TripsIndexRoute
   '/vehicles': typeof VehiclesIndexRoute
+  '/api/public/bootstrap-user': typeof ApiPublicBootstrapUserRoute
   '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
   '/voucher': typeof VoucherRoute
   '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/drivers/$driverId': typeof DriversDriverIdRoute
@@ -133,12 +150,14 @@ export interface FileRoutesById {
   '/settings/': typeof SettingsIndexRoute
   '/trips/': typeof TripsIndexRoute
   '/vehicles/': typeof VehiclesIndexRoute
+  '/api/public/bootstrap-user': typeof ApiPublicBootstrapUserRoute
   '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/auth'
     | '/voucher'
     | '/customers/$customerId'
     | '/drivers/$driverId'
@@ -150,10 +169,12 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/trips/'
     | '/vehicles/'
+    | '/api/public/bootstrap-user'
     | '/trips/$tripId/audit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/auth'
     | '/voucher'
     | '/customers/$customerId'
     | '/drivers/$driverId'
@@ -165,10 +186,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trips'
     | '/vehicles'
+    | '/api/public/bootstrap-user'
     | '/trips/$tripId/audit'
   id:
     | '__root__'
     | '/'
+    | '/auth'
     | '/voucher'
     | '/customers/$customerId'
     | '/drivers/$driverId'
@@ -180,11 +203,13 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/trips/'
     | '/vehicles/'
+    | '/api/public/bootstrap-user'
     | '/trips/$tripId/audit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
   VoucherRoute: typeof VoucherRoute
   CustomersCustomerIdRoute: typeof CustomersCustomerIdRoute
   DriversDriverIdRoute: typeof DriversDriverIdRoute
@@ -196,6 +221,7 @@ export interface RootRouteChildren {
   SettingsIndexRoute: typeof SettingsIndexRoute
   TripsIndexRoute: typeof TripsIndexRoute
   VehiclesIndexRoute: typeof VehiclesIndexRoute
+  ApiPublicBootstrapUserRoute: typeof ApiPublicBootstrapUserRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -205,6 +231,13 @@ declare module '@tanstack/react-router' {
       path: '/voucher'
       fullPath: '/voucher'
       preLoaderRoute: typeof VoucherRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -291,6 +324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TripsTripIdAuditRouteImport
       parentRoute: typeof TripsTripIdRoute
     }
+    '/api/public/bootstrap-user': {
+      id: '/api/public/bootstrap-user'
+      path: '/api/public/bootstrap-user'
+      fullPath: '/api/public/bootstrap-user'
+      preLoaderRoute: typeof ApiPublicBootstrapUserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -308,6 +348,7 @@ const TripsTripIdRouteWithChildren = TripsTripIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
   VoucherRoute: VoucherRoute,
   CustomersCustomerIdRoute: CustomersCustomerIdRoute,
   DriversDriverIdRoute: DriversDriverIdRoute,
@@ -319,17 +360,8 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsIndexRoute: SettingsIndexRoute,
   TripsIndexRoute: TripsIndexRoute,
   VehiclesIndexRoute: VehiclesIndexRoute,
+  ApiPublicBootstrapUserRoute: ApiPublicBootstrapUserRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

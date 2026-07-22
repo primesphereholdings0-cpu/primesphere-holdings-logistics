@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Loader2, Truck, User } from "lucide-react";
+import { Plus, Loader2, Truck, User, Building2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { supabase } from "@/integrations/supabase/client";
-import { driversQuery, vehiclesQuery } from "@/lib/queries";
+import { contractsQuery, customersQuery, driversQuery, vehiclesQuery } from "@/lib/queries";
 import { fmtTZS, fmtUSD } from "@/lib/format";
 import { NewDriverDialog } from "./NewDriverDialog";
 
@@ -26,16 +26,36 @@ export function NewTripDialog() {
   const [open, setOpen] = useState(false);
   const { data: vehicles } = useQuery({ ...vehiclesQuery, refetchOnMount: "always" });
   const { data: drivers } = useQuery({ ...driversQuery, refetchOnMount: "always" });
-
+  const { data: customers } = useQuery({ ...customersQuery, refetchOnMount: "always" });
+  const { data: contracts } = useQuery({ ...contractsQuery, refetchOnMount: "always" });
 
   const [vehicleId, setVehicleId] = useState<string>("");
   const [driverId, setDriverId] = useState<string>("");
+  const [customerId, setCustomerId] = useState<string>("");
+  const [contractId, setContractId] = useState<string>("");
   const [route, setRoute] = useState("Dar es Salaam → Kasumbalesa");
   const [plannedKm, setPlannedKm] = useState("4000");
   const [contractUsd, setContractUsd] = useState("7200");
   const [fxRate, setFxRate] = useState("2600");
   const [advanceType, setAdvanceType] = useState<"percentage" | "fixed">("percentage");
   const [advanceValue, setAdvanceValue] = useState("70");
+
+  const availableContracts = useMemo(
+    () => (contracts ?? []).filter((c) => !customerId || c.customer_id === customerId),
+    [contracts, customerId],
+  );
+  const selectedContract = useMemo(
+    () => (contracts ?? []).find((c) => c.id === contractId) ?? null,
+    [contracts, contractId],
+  );
+
+  // When a contract is picked, auto-fill the freight amount + route.
+  useEffect(() => {
+    if (!selectedContract) return;
+    setContractUsd(String(selectedContract.contract_amount));
+    if (selectedContract.route) setRoute(selectedContract.route);
+    if (selectedContract.customer_id) setCustomerId(selectedContract.customer_id);
+  }, [selectedContract]);
 
   const totalContractTzs = Number(contractUsd || 0) * Number(fxRate || 0);
   const advancePaidUsd = useMemo(() => {
@@ -54,6 +74,8 @@ export function NewTripDialog() {
           origin_destination: route,
           vehicle_id: vehicleId || null,
           driver_id: driverId || null,
+          customer_id: customerId || null,
+          contract_id: contractId || null,
           planned_km: Number(plannedKm || 0),
           dispatch_date: new Date().toISOString().slice(0, 10),
           status: "Dispatched",
@@ -132,6 +154,45 @@ export function NewTripDialog() {
               </Select>
             </div>
 
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5" /> Customer
+              </Label>
+              <Select
+                value={customerId}
+                onValueChange={(v) => {
+                  setCustomerId(v);
+                  setContractId("");
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
+                <SelectContent>
+                  {customers?.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" /> Contract
+              </Label>
+              <Select value={contractId} onValueChange={setContractId} disabled={!availableContracts.length}>
+                <SelectTrigger>
+                  <SelectValue placeholder={availableContracts.length ? "Link a contract" : "No contracts available"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableContracts.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.route} · {c.contract_currency} {Number(c.contract_amount).toLocaleString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-[1fr_140px]">

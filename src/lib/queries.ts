@@ -464,3 +464,15 @@ export const financeOverviewQuery = queryOptions({
     };
   },
 });
+
+export const contractsQuery = queryOptions({
+  queryKey: ["contracts"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("contracts")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data as Contract[];
+  },
+});

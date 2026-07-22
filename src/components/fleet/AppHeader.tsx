@@ -1,8 +1,9 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import { Truck, LayoutDashboard, Smartphone, Moon, Sun, Users, Receipt, Route as RouteIcon, LineChart, Building2, Settings } from "lucide-react";
+import { Link, useRouter, useRouterState } from "@tanstack/react-router";
+import { Truck, LayoutDashboard, Smartphone, Moon, Sun, Users, Receipt, Route as RouteIcon, LineChart, Building2, Settings, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 export function AppHeader({ right }: { right?: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -73,8 +74,27 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
           <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
+          <SignOutButton />
         </div>
       </div>
     </header>
   );
 }
+
+function SignOutButton() {
+  const router = useRouter();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Sign out"
+      onClick={async () => {
+        await supabase.auth.signOut();
+        router.navigate({ to: "/auth" });
+      }}
+    >
+      <LogOut className="h-4 w-4" />
+    </Button>
+  );
+}
+
