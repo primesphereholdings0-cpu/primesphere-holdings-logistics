@@ -121,7 +121,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useRouterState, useRouter } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
