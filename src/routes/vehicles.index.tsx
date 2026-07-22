@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Truck, Activity, Wallet, Gauge } from "lucide-react";
 
-import { AppHeader } from "@/components/fleet/AppHeader";
 import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog";
 import { vehiclesOverviewQuery } from "@/lib/queries";
 import { fmtTZS } from "@/lib/format";
@@ -11,9 +10,9 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/vehicles/")({
   head: () => ({
     meta: [
-      { title: "Vehicles — FleetPulse" },
+      { title: "Vehicles — Primesphere Holdings Logistics" },
       { name: "description", content: "Manage trucks, capacity and status across the fleet." },
-      { property: "og:title", content: "Vehicles — FleetPulse" },
+      { property: "og:title", content: "Vehicles — Primesphere Holdings Logistics" },
       { property: "og:description", content: "Every truck in your fleet, with utilization and revenue at a glance." },
     ],
   }),
@@ -34,27 +33,42 @@ function VehiclesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader right={<NewVehicleDialog />} />
+      {/* Page header */}
+      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Vehicles</h1>
+          <p className="text-xs text-muted-foreground">Manage trucks, capacity and status across the fleet.</p>
+        </div>
+        <NewVehicleDialog />
+      </div>
 
+      {/* Hero stats */}
       <div className="border-b bg-gradient-to-br from-primary/8 via-background to-accent/20">
-        <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
-          <div className="inline-flex items-center gap-1.5 rounded-full border bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
-            <Truck className="h-3 w-3 text-primary" /> Fleet inventory
-          </div>
-          <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Vehicles</h1>
-          <p className="mt-1.5 text-sm text-muted-foreground max-w-xl">
-            Every truck in your fleet — track status, capacity, utilization and revenue generated.
-          </p>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            <StatCard icon={<Truck className="h-5 w-5" />} tone="primary" label="Vehicles in fleet" value={String(vehicles.length)} />
-            <StatCard icon={<Activity className="h-5 w-5" />} tone="warning" label="Currently on trips" value={String(totals.active)} />
-            <StatCard icon={<Wallet className="h-5 w-5" />} tone="success" label="Total revenue booked" value={fmtTZS(totals.revenue)} />
+        <div className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              icon={<Truck className="h-5 w-5" />}
+              tone="primary"
+              label="Vehicles in fleet"
+              value={String(vehicles.length)}
+            />
+            <StatCard
+              icon={<Activity className="h-5 w-5" />}
+              tone="warning"
+              label="Currently on trips"
+              value={String(totals.active)}
+            />
+            <StatCard
+              icon={<Wallet className="h-5 w-5" />}
+              tone="success"
+              label="Total revenue booked"
+              value={fmtTZS(totals.revenue)}
+            />
           </div>
         </div>
       </div>
 
-      <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-8">
+      <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
         <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
