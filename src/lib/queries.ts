@@ -63,6 +63,55 @@ export type TripExpense = {
   created_at: string;
 };
 
+export type Customer = {
+  id: string;
+  company_name: string;
+  contact_person: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  status: string;
+  created_at: string;
+};
+export type Contract = {
+  id: string;
+  customer_id: string;
+  route: string;
+  contract_currency: string;
+  contract_amount: number;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+  created_at: string;
+};
+export type CompanySettings = {
+  id: string;
+  company_name: string;
+  logo_url: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  default_currency: string;
+  default_fx_rate: number;
+  notifications_enabled: boolean;
+};
+export type UserRole = {
+  id: string;
+  user_id: string;
+  display_name: string | null;
+  role: "admin" | "dispatcher" | "finance" | "driver";
+  created_at: string;
+};
+export type AuditLog = {
+  id: string;
+  actor: string | null;
+  action: string;
+  entity: string;
+  entity_id: string | null;
+  payload: unknown;
+  created_at: string;
+};
+
 export type TripRow = Trip & {
   vehicle: Vehicle | null;
   driver: Driver | null;
