@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { NewVehicleDialog } from "@/components/fleet/NewVehicleDialog"; // ← ADDED
 import { NewMaintenanceDialog } from "@/components/fleet/NewMaintenanceDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -140,9 +141,13 @@ function VehicleDetailPage() {
             {vehicle.status}
           </Badge>
         </div>
-        <NewMaintenanceDialog />
+        <div className="flex items-center gap-2">
+          <NewVehicleDialog initialData={vehicle} /> {/* ← EDIT BUTTON */}
+          <NewMaintenanceDialog />
+        </div>
       </div>
 
+      {/* ... the rest of the page stays exactly the same ... */}
       <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
         {/* Quick stats */}
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
