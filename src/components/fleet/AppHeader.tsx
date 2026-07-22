@@ -80,3 +80,21 @@ export function AppHeader({ right }: { right?: React.ReactNode }) {
     </header>
   );
 }
+
+function SignOutButton() {
+  const router = useRouter();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Sign out"
+      onClick={async () => {
+        await supabase.auth.signOut();
+        router.navigate({ to: "/auth" });
+      }}
+    >
+      <LogOut className="h-4 w-4" />
+    </Button>
+  );
+}
+
