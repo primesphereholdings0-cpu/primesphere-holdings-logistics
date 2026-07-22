@@ -353,3 +353,114 @@ export const expensesQuery = queryOptions({
 });
 
 
+
+export const customersQuery = queryOptions({
+  queryKey: ["customers"],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("customers").select("*").order("company_name");
+    if (error) throw error;
+    return data as Customer[];
+  },
+});
+
+export type CustomerRow = Customer & {
+  trip_count: number;
+  contract_count: number;
+  revenue_usd: number;
+};
+
+export const customersOverviewQuery = queryOptions({
+  queryKey: ["customers", "overview"],
+  queryFn: async (): Promise<CustomerRow[]> => {
+    const [{ data: customers, error }, { data: trips }, { data: fins }, { data: contracts }] = await Promise.all([
+      supabase.from("customers").select("*").order("company_name"),
+      supabase.from("trips").select("id, customer_id"),
+      supabase.from("trip_financials").select("trip_id, contract_amount"),
+      supabase.from("contracts").select("customer_id"),
+    ]);
+    if (error) throw error;
+    const finMap = new Map((fins ?? []).map((f) => [f.trip_id, Number(f.contract_amount)]));
+    return (customers ?? []).map((c) => {
+      const ctrips = (trips ?? []).filter((t) => t.customer_id === c.id);
+      const rev = ctrips.reduce((s, t) => s + (finMap.get(t.id) ?? 0), 0);
+      return {
+        ...(c as Customer),
+        trip_count: ctrips.length,
+        contract_count: (contracts ?? []).filter((x) => x.customer_id === c.id).length,
+        revenue_usd: rev,
+      };
+    });
+  },
+});
+
+export const customerDetailQuery = (customerId: string) =>
+  queryOptions({
+    queryKey: ["customer", customerId],
+    queryFn: async () => {
+      const [{ data: customer }, { data: contracts }, { data: trips }] = await Promise.all([
+        supabase.from("customers").select("*").eq("id", customerId).maybeSingle(),
+        supabase.from("contracts").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+        supabase.from("trips").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
+      ]);
+      if (!customer) return null;
+      const tripIds = (trips ?? []).map((t) => t.id);
+      const { data: fins } = tripIds.length
+        ? await supabase.from("trip_financials").select("*").in("trip_id", tripIds)
+        : { data: [] as TripFinancial[] };
+      const fMap = new Map((fins ?? []).map((f) => [f.trip_id, f as TripFinancial]));
+      return {
+        customer: customer as Customer,
+        contracts: (contracts ?? []) as Contract[],
+        trips: (trips as Trip[]).map((t) => ({ ...t, financial: fMap.get(t.id) ?? null })),
+      };
+    },
+  });
+
+export const companySettingsQuery = queryOptions({
+  queryKey: ["company_settings"],
+  queryFn: async () => {
+    const { data } = await supabase.from("company_settings").select("*").limit(1).maybeSingle();
+    return data as CompanySettings | null;
+  },
+});
+
+export const userRolesQuery = queryOptions({
+  queryKey: ["user_roles"],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("user_roles").select("*").order("created_at", { ascending: false });
+    if (error) throw error;
+    return data as UserRole[];
+  },
+});
+
+export const auditLogsQuery = queryOptions({
+  queryKey: ["audit_logs"],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100);
+    if (error) throw error;
+    return data as AuditLog[];
+  },
+});
+
+export const financeOverviewQuery = queryOptions({
+  queryKey: ["finance", "overview"],
+  queryFn: async () => {
+    const [{ data: trips }, { data: fins }, { data: exps }, { data: pays }, { data: drivers }, { data: contracts }] =
+      await Promise.all([
+        supabase.from("trips").select("*"),
+        supabase.from("trip_financials").select("*"),
+        supabase.from("trip_expenses").select("*"),
+        supabase.from("driver_payments").select("*"),
+        supabase.from("drivers").select("*"),
+        supabase.from("contracts").select("*"),
+      ]);
+    return {
+      trips: (trips ?? []) as Trip[],
+      financials: (fins ?? []) as TripFinancial[],
+      expenses: (exps ?? []) as TripExpense[],
+      payments: (pays ?? []) as DriverPayment[],
+      drivers: (drivers ?? []) as Driver[],
+      contracts: (contracts ?? []) as Contract[],
+    };
+  },
+});
