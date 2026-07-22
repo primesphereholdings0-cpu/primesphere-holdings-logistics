@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Camera, Loader2, Send, Truck } from "lucide-react";
 import { toast } from "sonner";
 
-import { AppHeader } from "@/components/fleet/AppHeader";
 import { StatusBadge } from "@/components/fleet/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +16,12 @@ import { fmtTZS } from "@/lib/format";
 
 export const Route = createFileRoute("/voucher")({
   component: VoucherPage,
+  head: () => ({
+    meta: [
+      { title: "Driver Voucher — Primesphere Holdings Logistics" },
+      { name: "description", content: "Log trip expenses and submit receipts for audit." },
+    ],
+  }),
 });
 
 const CATEGORIES = [
@@ -73,18 +78,19 @@ function VoucherPage() {
 
   return (
     <div className="min-h-screen bg-background pb-safe">
-      <AppHeader />
-      <main className="mx-auto max-w-md px-4 py-6">
-        <div className="mb-4 flex items-center gap-2">
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <Truck className="h-4 w-4" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Driver voucher entry</h1>
-            <p className="text-xs text-muted-foreground">Log a paper receipt in seconds.</p>
-          </div>
+      {/* Page header */}
+      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <Truck className="h-5 w-5 text-primary" />
+            Driver Voucher
+          </h1>
+          <p className="text-xs text-muted-foreground">Log a paper receipt in seconds.</p>
         </div>
+        {/* No action button needed */}
+      </div>
 
+      <main className="mx-auto max-w-md px-4 py-6">
         <div className="rounded-xl border bg-card p-4 shadow-sm space-y-4">
           <div className="grid gap-1.5">
             <Label>Active trip</Label>
