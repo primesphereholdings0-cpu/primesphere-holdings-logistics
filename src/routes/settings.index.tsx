@@ -146,7 +146,7 @@ function UsersTab() {
   const add = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("user_roles").insert({
-        user_id: crypto.randomUUID(), display_name: f.display_name, role: f.role,
+        user_id: crypto.randomUUID(), display_name: f.display_name, role: f.role as "admin" | "dispatcher" | "finance" | "driver",
       });
       if (error) throw error;
     },
