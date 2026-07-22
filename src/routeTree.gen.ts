@@ -22,6 +22,7 @@ import { Route as TripsTripIdRouteImport } from './routes/trips.$tripId'
 import { Route as DriversDriverIdRouteImport } from './routes/drivers.$driverId'
 import { Route as CustomersCustomerIdRouteImport } from './routes/customers.$customerId'
 import { Route as TripsTripIdAuditRouteImport } from './routes/trips.$tripId.audit'
+import { Route as ApiPublicBootstrapUserRouteImport } from './routes/api/public/bootstrap-user'
 
 const VoucherRoute = VoucherRouteImport.update({
   id: '/voucher',
@@ -88,6 +89,11 @@ const TripsTripIdAuditRoute = TripsTripIdAuditRouteImport.update({
   path: '/audit',
   getParentRoute: () => TripsTripIdRoute,
 } as any)
+const ApiPublicBootstrapUserRoute = ApiPublicBootstrapUserRouteImport.update({
+  id: '/api/public/bootstrap-user',
+  path: '/api/public/bootstrap-user',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/settings/': typeof SettingsIndexRoute
   '/trips/': typeof TripsIndexRoute
   '/vehicles/': typeof VehiclesIndexRoute
+  '/api/public/bootstrap-user': typeof ApiPublicBootstrapUserRoute
   '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRoutesByTo {
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsIndexRoute
   '/trips': typeof TripsIndexRoute
   '/vehicles': typeof VehiclesIndexRoute
+  '/api/public/bootstrap-user': typeof ApiPublicBootstrapUserRoute
   '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRoutesById {
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/settings/': typeof SettingsIndexRoute
   '/trips/': typeof TripsIndexRoute
   '/vehicles/': typeof VehiclesIndexRoute
+  '/api/public/bootstrap-user': typeof ApiPublicBootstrapUserRoute
   '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRouteTypes {
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/trips/'
     | '/vehicles/'
+    | '/api/public/bootstrap-user'
     | '/trips/$tripId/audit'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/trips'
     | '/vehicles'
+    | '/api/public/bootstrap-user'
     | '/trips/$tripId/audit'
   id:
     | '__root__'
@@ -180,6 +191,7 @@ export interface FileRouteTypes {
     | '/settings/'
     | '/trips/'
     | '/vehicles/'
+    | '/api/public/bootstrap-user'
     | '/trips/$tripId/audit'
   fileRoutesById: FileRoutesById
 }
@@ -196,6 +208,7 @@ export interface RootRouteChildren {
   SettingsIndexRoute: typeof SettingsIndexRoute
   TripsIndexRoute: typeof TripsIndexRoute
   VehiclesIndexRoute: typeof VehiclesIndexRoute
+  ApiPublicBootstrapUserRoute: typeof ApiPublicBootstrapUserRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -291,6 +304,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TripsTripIdAuditRouteImport
       parentRoute: typeof TripsTripIdRoute
     }
+    '/api/public/bootstrap-user': {
+      id: '/api/public/bootstrap-user'
+      path: '/api/public/bootstrap-user'
+      fullPath: '/api/public/bootstrap-user'
+      preLoaderRoute: typeof ApiPublicBootstrapUserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -319,17 +339,8 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsIndexRoute: SettingsIndexRoute,
   TripsIndexRoute: TripsIndexRoute,
   VehiclesIndexRoute: VehiclesIndexRoute,
+  ApiPublicBootstrapUserRoute: ApiPublicBootstrapUserRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
