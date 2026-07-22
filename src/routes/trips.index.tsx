@@ -37,7 +37,7 @@ function TripsPage() {
 
   const advance = useMutation({
     mutationFn: async ({ id, next }: { id: string; next: string }) => {
-      const patch: Record<string, unknown> = { status: next };
+      const patch: { status: string; settled_at?: string; audited_at?: string } = { status: next };
       if (next === "Completed") patch.settled_at = new Date().toISOString();
       if (next === "Audited") patch.audited_at = new Date().toISOString();
       const { error } = await supabase.from("trips").update(patch).eq("id", id);

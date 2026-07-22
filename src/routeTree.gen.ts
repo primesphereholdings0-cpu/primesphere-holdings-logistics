@@ -12,10 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VoucherRouteImport } from './routes/voucher'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VehiclesIndexRouteImport } from './routes/vehicles.index'
+import { Route as TripsIndexRouteImport } from './routes/trips.index'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
+import { Route as FinanceIndexRouteImport } from './routes/finance.index'
 import { Route as ExpensesIndexRouteImport } from './routes/expenses.index'
 import { Route as DriversIndexRouteImport } from './routes/drivers.index'
+import { Route as CustomersIndexRouteImport } from './routes/customers.index'
 import { Route as TripsTripIdRouteImport } from './routes/trips.$tripId'
 import { Route as DriversDriverIdRouteImport } from './routes/drivers.$driverId'
+import { Route as CustomersCustomerIdRouteImport } from './routes/customers.$customerId'
+import { Route as TripsTripIdAuditRouteImport } from './routes/trips.$tripId.audit'
 
 const VoucherRoute = VoucherRouteImport.update({
   id: '/voucher',
@@ -32,6 +38,21 @@ const VehiclesIndexRoute = VehiclesIndexRouteImport.update({
   path: '/vehicles/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TripsIndexRoute = TripsIndexRouteImport.update({
+  id: '/trips/',
+  path: '/trips/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceIndexRoute = FinanceIndexRouteImport.update({
+  id: '/finance/',
+  path: '/finance/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExpensesIndexRoute = ExpensesIndexRouteImport.update({
   id: '/expenses/',
   path: '/expenses/',
@@ -40,6 +61,11 @@ const ExpensesIndexRoute = ExpensesIndexRouteImport.update({
 const DriversIndexRoute = DriversIndexRouteImport.update({
   id: '/drivers/',
   path: '/drivers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CustomersIndexRoute = CustomersIndexRouteImport.update({
+  id: '/customers/',
+  path: '/customers/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TripsTripIdRoute = TripsTripIdRouteImport.update({
@@ -52,72 +78,123 @@ const DriversDriverIdRoute = DriversDriverIdRouteImport.update({
   path: '/drivers/$driverId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CustomersCustomerIdRoute = CustomersCustomerIdRouteImport.update({
+  id: '/customers/$customerId',
+  path: '/customers/$customerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TripsTripIdAuditRoute = TripsTripIdAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => TripsTripIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/voucher': typeof VoucherRoute
+  '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/drivers/$driverId': typeof DriversDriverIdRoute
-  '/trips/$tripId': typeof TripsTripIdRoute
+  '/trips/$tripId': typeof TripsTripIdRouteWithChildren
+  '/customers/': typeof CustomersIndexRoute
   '/drivers/': typeof DriversIndexRoute
   '/expenses/': typeof ExpensesIndexRoute
+  '/finance/': typeof FinanceIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/trips/': typeof TripsIndexRoute
   '/vehicles/': typeof VehiclesIndexRoute
+  '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/voucher': typeof VoucherRoute
+  '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/drivers/$driverId': typeof DriversDriverIdRoute
-  '/trips/$tripId': typeof TripsTripIdRoute
+  '/trips/$tripId': typeof TripsTripIdRouteWithChildren
+  '/customers': typeof CustomersIndexRoute
   '/drivers': typeof DriversIndexRoute
   '/expenses': typeof ExpensesIndexRoute
+  '/finance': typeof FinanceIndexRoute
+  '/settings': typeof SettingsIndexRoute
+  '/trips': typeof TripsIndexRoute
   '/vehicles': typeof VehiclesIndexRoute
+  '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/voucher': typeof VoucherRoute
+  '/customers/$customerId': typeof CustomersCustomerIdRoute
   '/drivers/$driverId': typeof DriversDriverIdRoute
-  '/trips/$tripId': typeof TripsTripIdRoute
+  '/trips/$tripId': typeof TripsTripIdRouteWithChildren
+  '/customers/': typeof CustomersIndexRoute
   '/drivers/': typeof DriversIndexRoute
   '/expenses/': typeof ExpensesIndexRoute
+  '/finance/': typeof FinanceIndexRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/trips/': typeof TripsIndexRoute
   '/vehicles/': typeof VehiclesIndexRoute
+  '/trips/$tripId/audit': typeof TripsTripIdAuditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/voucher'
+    | '/customers/$customerId'
     | '/drivers/$driverId'
     | '/trips/$tripId'
+    | '/customers/'
     | '/drivers/'
     | '/expenses/'
+    | '/finance/'
+    | '/settings/'
+    | '/trips/'
     | '/vehicles/'
+    | '/trips/$tripId/audit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/voucher'
+    | '/customers/$customerId'
     | '/drivers/$driverId'
     | '/trips/$tripId'
+    | '/customers'
     | '/drivers'
     | '/expenses'
+    | '/finance'
+    | '/settings'
+    | '/trips'
     | '/vehicles'
+    | '/trips/$tripId/audit'
   id:
     | '__root__'
     | '/'
     | '/voucher'
+    | '/customers/$customerId'
     | '/drivers/$driverId'
     | '/trips/$tripId'
+    | '/customers/'
     | '/drivers/'
     | '/expenses/'
+    | '/finance/'
+    | '/settings/'
+    | '/trips/'
     | '/vehicles/'
+    | '/trips/$tripId/audit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   VoucherRoute: typeof VoucherRoute
+  CustomersCustomerIdRoute: typeof CustomersCustomerIdRoute
   DriversDriverIdRoute: typeof DriversDriverIdRoute
-  TripsTripIdRoute: typeof TripsTripIdRoute
+  TripsTripIdRoute: typeof TripsTripIdRouteWithChildren
+  CustomersIndexRoute: typeof CustomersIndexRoute
   DriversIndexRoute: typeof DriversIndexRoute
   ExpensesIndexRoute: typeof ExpensesIndexRoute
+  FinanceIndexRoute: typeof FinanceIndexRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+  TripsIndexRoute: typeof TripsIndexRoute
   VehiclesIndexRoute: typeof VehiclesIndexRoute
 }
 
@@ -144,6 +221,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VehiclesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/trips/': {
+      id: '/trips/'
+      path: '/trips'
+      fullPath: '/trips/'
+      preLoaderRoute: typeof TripsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/': {
+      id: '/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance/': {
+      id: '/finance/'
+      path: '/finance'
+      fullPath: '/finance/'
+      preLoaderRoute: typeof FinanceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/expenses/': {
       id: '/expenses/'
       path: '/expenses'
@@ -156,6 +254,13 @@ declare module '@tanstack/react-router' {
       path: '/drivers'
       fullPath: '/drivers/'
       preLoaderRoute: typeof DriversIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/customers/': {
+      id: '/customers/'
+      path: '/customers'
+      fullPath: '/customers/'
+      preLoaderRoute: typeof CustomersIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/trips/$tripId': {
@@ -172,16 +277,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DriversDriverIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/customers/$customerId': {
+      id: '/customers/$customerId'
+      path: '/customers/$customerId'
+      fullPath: '/customers/$customerId'
+      preLoaderRoute: typeof CustomersCustomerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trips/$tripId/audit': {
+      id: '/trips/$tripId/audit'
+      path: '/audit'
+      fullPath: '/trips/$tripId/audit'
+      preLoaderRoute: typeof TripsTripIdAuditRouteImport
+      parentRoute: typeof TripsTripIdRoute
+    }
   }
 }
+
+interface TripsTripIdRouteChildren {
+  TripsTripIdAuditRoute: typeof TripsTripIdAuditRoute
+}
+
+const TripsTripIdRouteChildren: TripsTripIdRouteChildren = {
+  TripsTripIdAuditRoute: TripsTripIdAuditRoute,
+}
+
+const TripsTripIdRouteWithChildren = TripsTripIdRoute._addFileChildren(
+  TripsTripIdRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   VoucherRoute: VoucherRoute,
+  CustomersCustomerIdRoute: CustomersCustomerIdRoute,
   DriversDriverIdRoute: DriversDriverIdRoute,
-  TripsTripIdRoute: TripsTripIdRoute,
+  TripsTripIdRoute: TripsTripIdRouteWithChildren,
+  CustomersIndexRoute: CustomersIndexRoute,
   DriversIndexRoute: DriversIndexRoute,
   ExpensesIndexRoute: ExpensesIndexRoute,
+  FinanceIndexRoute: FinanceIndexRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+  TripsIndexRoute: TripsIndexRoute,
   VehiclesIndexRoute: VehiclesIndexRoute,
 }
 export const routeTree = rootRouteImport
