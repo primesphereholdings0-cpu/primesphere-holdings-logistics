@@ -20,12 +20,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { contractsQuery, customersQuery, driversQuery, vehiclesQuery } from "@/lib/queries";
 import { fmtTZS, fmtUSD } from "@/lib/format";
 import { NewDriverDialog } from "./NewDriverDialog";
-import { TripRow } from "@/lib/queries"; // needed for the `initialData` type
+import { TripRow } from "@/lib/queries";
 
 type NewTripDialogProps = {
-  initialData?: TripRow | null; // when provided, dialog opens in edit mode
-  onClose?: () => void; // called when dialog closes (success or cancel)
-  trigger?: React.ReactNode; // custom trigger – defaults to "New Trip" button
+  initialData?: TripRow | null;
+  onClose?: () => void;
+  trigger?: React.ReactNode;
 };
 
 export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogProps) {
@@ -36,7 +36,6 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
   const { data: customers } = useQuery({ ...customersQuery, refetchOnMount: "always" });
   const { data: contracts } = useQuery({ ...contractsQuery, refetchOnMount: "always" });
 
-  // Form fields
   const [vehicleId, setVehicleId] = useState<string>("");
   const [driverId, setDriverId] = useState<string>("");
   const [customerId, setCustomerId] = useState<string>("");
@@ -48,7 +47,13 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
   const [advanceType, setAdvanceType] = useState<"percentage" | "fixed">("percentage");
   const [advanceValue, setAdvanceValue] = useState("70");
 
-  // When initialData is provided (edit mode), pre-fill the form and open the dialog
+  // --- FUEL ESTIMATION ---
+  const estimatedFuel = useMemo(() => {
+    const km = Number(plannedKm || 0);
+    return km * 0.05; // 0.05 L per km
+  }, [plannedKm]);
+
+  // Pre-fill when initialData is provided (edit mode)
   useEffect(() => {
     if (initialData) {
       setVehicleId(initialData.vehicle_id ?? "");
@@ -100,7 +105,6 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
     [contracts, contractId],
   );
 
-  // When a contract is picked, auto-fill the freight amount + route.
   useEffect(() => {
     if (!selectedContract) return;
     setContractUsd(String(selectedContract.contract_amount));
@@ -131,7 +135,6 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
       };
       let tripId: string;
       if (initialData) {
-        // Update existing trip
         const { error } = await supabase
           .from("trips")
           .update(tripPayload)
@@ -139,7 +142,6 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
         if (error) throw error;
         tripId = initialData.id;
       } else {
-        // Insert new trip
         const { data, error } = await supabase
           .from("trips")
           .insert(tripPayload)
@@ -149,7 +151,6 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
         tripId = data.id;
       }
 
-      // Upsert financials
       const finPayload = {
         trip_id: tripId,
         contract_currency: "USD",
@@ -161,14 +162,12 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
         advance_paid_tzs: advancePaidTzs,
       };
       if (initialData?.financial) {
-        // Update existing financials
         const { error } = await supabase
           .from("trip_financials")
           .update(finPayload)
           .eq("trip_id", tripId);
         if (error) throw error;
       } else {
-        // Insert new financials
         const { error } = await supabase
           .from("trip_financials")
           .insert(finPayload);
@@ -200,7 +199,6 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
           {trigger || defaultTrigger}
         </DialogTrigger>
       )}
-      {/* In controlled mode (edit), we don't use DialogTrigger – the dialog is opened via the effect */}
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{initialData ? "Edit trip" : "Dispatch new trip"}</DialogTitle>
@@ -292,7 +290,15 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
             </div>
             <div className="grid gap-1.5">
               <Label>Planned KM</Label>
-              <Input inputMode="numeric" value={plannedKm} onChange={(e) => setPlannedKm(e.target.value)} />
+              <Input
+                inputMode="numeric"
+                value={plannedKm}
+                onChange={(e) => setPlannedKm(e.target.value)}
+              />
+              {/* Fuel estimation helper */}
+              <div className="text-[11px] text-muted-foreground mt-1">
+                Estimated fuel: <span className="font-medium text-foreground">{estimatedFuel.toFixed(1)} L</span> (0.05 L/km)
+              </div>
             </div>
           </div>
 
