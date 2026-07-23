@@ -6,16 +6,140 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { supabase } from "@/integrations/supabase/client";
 
-// ... (keep NotFoundComponent, ErrorComponent unchanged) ...
+// ========== NOT FOUND COMPONENT ==========
+function NotFoundComponent() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-7xl font-bold text-foreground">404</h1>
+        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          The page you're looking for doesn't exist or has been moved.
+        </p>
+        <div className="mt-6">
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go home
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
+// ========== ERROR COMPONENT ==========
+function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  console.error(error);
+  const router = useRouter();
+  useEffect(() => {
+    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+  }, [error]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">This page didn't load</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Something went wrong. Try refreshing or head back to the dashboard.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <button
+            onClick={() => { router.invalidate(); reset(); }}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Try again
+          </button>
+          <a
+            href="/"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Go home
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========== ROOT SHELL ==========
+function RootShell({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <head>
+        <HeadContent />
+      </head>
+      <body>
+        {children}
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+// ========== AUTH GATE ==========
+function AuthGate({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const router = useRouter();
+  const [state, setState] = useState<"loading" | "in" | "out">("loading");
+
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setState(data.session ? "in" : "out");
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setState(session ? "in" : "out");
+      if (!session && pathname !== "/auth") router.navigate({ to: "/auth" });
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [pathname, router]);
+
+  if (pathname === "/auth") return <>{children}</>;
+  if (state === "loading") {
+    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading…</div>;
+  }
+  if (state === "out") {
+    if (typeof window !== "undefined") router.navigate({ to: "/auth" });
+    return null;
+  }
+  return <>{children}</>;
+}
+
+// ========== ROOT COMPONENT ==========
+function RootComponent() {
+  const { queryClient } = Route.useRouteContext();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthGate>
+        <div className="flex min-h-screen">
+          <Sidebar />
+          <main className="flex-1 overflow-auto">
+            <Outlet />
+          </main>
+        </div>
+      </AuthGate>
+      <Toaster position="top-right" richColors />
+    </QueryClientProvider>
+  );
+}
+
+// ========== ROUTE DEFINITION ==========
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
@@ -52,24 +176,3 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-// ... (RootShell stays same) ...
-
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthGate>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 overflow-auto">
-            <Outlet />
-          </main>
-        </div>
-      </AuthGate>
-      <Toaster position="top-right" richColors />
-    </QueryClientProvider>
-  );
-}
-
-// ... (AuthGate remains unchanged) ...
