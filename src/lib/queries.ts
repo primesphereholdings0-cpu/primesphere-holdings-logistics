@@ -460,18 +460,33 @@ export const auditLogsQuery = queryOptions({
   },
 });
 
+// ===== UPDATED: financeOverviewQuery with maintenance costs =====
 export const financeOverviewQuery = queryOptions({
   queryKey: ["finance", "overview"],
   queryFn: async () => {
-    const [{ data: trips }, { data: fins }, { data: exps }, { data: pays }, { data: drivers }, { data: contracts }] =
-      await Promise.all([
-        supabase.from("trips").select("*"),
-        supabase.from("trip_financials").select("*"),
-        supabase.from("trip_expenses").select("*"),
-        supabase.from("driver_payments").select("*"),
-        supabase.from("drivers").select("*"),
-        supabase.from("contracts").select("*"),
-      ]);
+    const [
+      { data: trips },
+      { data: fins },
+      { data: exps },
+      { data: pays },
+      { data: drivers },
+      { data: contracts },
+      { data: maintenance }, // <-- NEW: fetch maintenance records
+    ] = await Promise.all([
+      supabase.from("trips").select("*"),
+      supabase.from("trip_financials").select("*"),
+      supabase.from("trip_expenses").select("*"),
+      supabase.from("driver_payments").select("*"),
+      supabase.from("drivers").select("*"),
+      supabase.from("contracts").select("*"),
+      supabase.from("vehicle_maintenance").select("cost_tzs, status"), // <-- NEW
+    ]);
+
+    // Compute total maintenance cost for completed jobs
+    const maintenanceCost = (maintenance ?? [])
+      .filter((m) => m.status === "Completed")
+      .reduce((sum, m) => sum + Number(m.cost_tzs), 0);
+
     return {
       trips: (trips ?? []) as Trip[],
       financials: (fins ?? []) as TripFinancial[],
@@ -479,6 +494,7 @@ export const financeOverviewQuery = queryOptions({
       payments: (pays ?? []) as DriverPayment[],
       drivers: (drivers ?? []) as Driver[],
       contracts: (contracts ?? []) as Contract[],
+      maintenanceCost, // <-- NEW
     };
   },
 });
