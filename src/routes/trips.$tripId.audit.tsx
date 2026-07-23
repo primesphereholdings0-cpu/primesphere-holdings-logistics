@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { ArrowLeft, Download, Printer, CheckCircle2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import { AppHeader } from "@/components/fleet/AppHeader";
+
 import { StatusBadge } from "@/components/fleet/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { tripDetailQuery } from "@/lib/queries";
@@ -14,9 +14,9 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/trips/$tripId/audit")({
   component: AuditPage,
-  head: () => ({
+  head: ({ params }) => ({
     meta: [
-      { title: "Trip Audit — FleetPulse" },
+      { title: `Trip Audit — Primesphere Holdings Logistics` },
       { name: "description", content: "Trip settlement and financial audit view." },
     ],
   }),
@@ -26,6 +26,7 @@ const BREAKDOWN_CATS = ["Fuel", "Road Tolls", "Driver Millage", "Container Drop-
 
 function AuditPage() {
   const { tripId } = Route.useParams();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery(tripDetailQuery(tripId));
 
@@ -58,8 +59,8 @@ function AuditPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (isLoading) return <div className="min-h-screen"><AppHeader /><div className="p-10 text-muted-foreground">Loading…</div></div>;
-  if (!data) return <div className="min-h-screen"><AppHeader /><div className="p-10">Trip not found.</div></div>;
+  if (isLoading) return <div className="min-h-screen bg-background"><div className="p-10 text-muted-foreground">Loading…</div></div>;
+  if (!data) return <div className="min-h-screen bg-background"><div className="p-10">Trip not found.</div></div>;
 
   const { trip, financial, vehicle, driver, expenses } = data;
   const contractUsd = Number(financial?.contract_amount ?? 0);
@@ -80,35 +81,38 @@ function AuditPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader />
-      <div className="border-b bg-gradient-to-br from-primary/8 via-background to-accent/20 print:bg-white">
-        <div className="mx-auto max-w-[1200px] px-4 md:px-6 py-6">
-          <Link to="/trips" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-3.5 w-3.5" /> Trips
-          </Link>
-          <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-muted-foreground">{trip.trip_code}</span>
-                <StatusBadge status={trip.status} />
-              </div>
-              <h1 className="mt-1 text-2xl md:text-3xl font-bold tracking-tight">Trip Audit &amp; Settlement</h1>
-              <div className="mt-1 text-sm text-muted-foreground">
-                {trip.origin_destination} · {vehicle?.reg_number ?? "—"} · Driver{" "}
-                <span className="font-medium text-foreground">{driver?.full_name ?? "—"}</span> · {fmtNum(trip.planned_km)} km
-              </div>
+      {/* Page header – no AppHeader */}
+      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between gap-3 flex-wrap print:hidden">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate({ to: "/trips" })}
+            className="h-8 w-8"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-muted-foreground">{trip.trip_code}</span>
+              <StatusBadge status={trip.status} />
             </div>
-            <div className="flex flex-wrap gap-2 print:hidden">
-              <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5"><Download className="h-4 w-4" />CSV</Button>
-              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5"><Printer className="h-4 w-4" />Print/PDF</Button>
-              <Button variant="outline" size="sm" onClick={() => settle.mutate("Completed")} disabled={trip.status === "Audited"} className="gap-1.5">
-                <CheckCircle2 className="h-4 w-4" />Mark Settled
-              </Button>
-              <Button size="sm" onClick={() => settle.mutate("Audited")} disabled={trip.status === "Audited"} className="gap-1.5">
-                <ShieldCheck className="h-4 w-4" />Mark Audited
-              </Button>
+            <h1 className="text-xl font-bold tracking-tight">Trip Audit &amp; Settlement</h1>
+            <div className="text-xs text-muted-foreground">
+              {trip.origin_destination} · {vehicle?.reg_number ?? "—"} · Driver{" "}
+              <span className="font-medium text-foreground">{driver?.full_name ?? "—"}</span> · {fmtNum(trip.planned_km)} km
             </div>
           </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={exportCsv} className="gap-1.5"><Download className="h-4 w-4" />CSV</Button>
+          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-1.5"><Printer className="h-4 w-4" />Print/PDF</Button>
+          <Button variant="outline" size="sm" onClick={() => settle.mutate("Completed")} disabled={trip.status === "Audited"} className="gap-1.5">
+            <CheckCircle2 className="h-4 w-4" />Mark Settled
+          </Button>
+          <Button size="sm" onClick={() => settle.mutate("Audited")} disabled={trip.status === "Audited"} className="gap-1.5">
+            <ShieldCheck className="h-4 w-4" />Mark Audited
+          </Button>
         </div>
       </div>
 
