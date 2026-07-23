@@ -9,11 +9,13 @@ import {
   Receipt,
   Wallet,
   MapPin,
+  FileText,
 } from "lucide-react";
 
 import { StatusBadge } from "@/components/fleet/StatusBadge";
 import { AddExpenseDrawer } from "@/components/fleet/AddExpenseDrawer";
 import { ReceiptViewer } from "@/components/fleet/ReceiptViewer";
+import { RecordCustomerPaymentDialog } from "@/components/fleet/RecordCustomerPaymentDialog";
 import { tripDetailQuery } from "@/lib/queries";
 import { fmtNum, fmtTZS, fmtUSD } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -68,12 +70,14 @@ function TripDetailPage() {
   const advanceTzs = Number(financial?.advance_paid_tzs ?? 0);
   const cashRemaining = advanceTzs - totals.verified;
   const contractTzs = Number(financial?.total_contract_tzs ?? 0);
+  const customerPaid = Number(financial?.customer_paid_tzs ?? 0);
+  const customerBalance = contractTzs - customerPaid;
 
   const filtered = cat === "All" ? expenses : expenses.filter((e) => e.category === cat);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Page header – no AppHeader */}
+      {/* Page header */}
       <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <Button
@@ -88,6 +92,16 @@ function TripDetailPage() {
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-muted-foreground">{trip.trip_code}</span>
               <StatusBadge status={trip.status} />
+              {trip.invoice_id && (
+                <Link
+                  to="/invoices/$invoiceId"
+                  params={{ invoiceId: trip.invoice_id }}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary hover:underline"
+                >
+                  <FileText className="h-3 w-3" />
+                  Invoice
+                </Link>
+              )}
             </div>
             <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
               <MapPin className="h-5 w-5 text-primary" />
@@ -100,12 +114,22 @@ function TripDetailPage() {
             </div>
           </div>
         </div>
-        <AddExpenseDrawer tripId={trip.id} />
+        <div className="flex items-center gap-2">
+          {trip.trip_type === "local" && (
+            <RecordCustomerPaymentDialog
+              tripId={trip.id}
+              tripCode={trip.trip_code}
+              currentPaid={customerPaid}
+              contractAmount={contractTzs}
+            />
+          )}
+          <AddExpenseDrawer tripId={trip.id} />
+        </div>
       </div>
 
       <main className="mx-auto max-w-[1200px] px-4 md:px-6 py-6">
-        {/* Financial banner */}
-        <div className="grid gap-3 md:grid-cols-4 mb-6">
+        {/* Financial banner – add customer payment card */}
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4 mb-6">
           <BannerCard
             icon={<DollarSign className="h-4 w-4" />}
             label="Contract total"
@@ -135,6 +159,16 @@ function TripDetailPage() {
             tone={cashRemaining < 0 ? "destructive" : "success"}
             emphasis
           />
+          {/* New: Customer payment card (only for local trips) */}
+          {trip.trip_type === "local" && (
+            <BannerCard
+              icon={<Banknote className="h-4 w-4" />}
+              label="Customer paid"
+              primary={fmtTZS(customerPaid)}
+              sub={`Balance: ${fmtTZS(customerBalance)}`}
+              tone={customerBalance === 0 ? "success" : "primary"}
+            />
+          )}
         </div>
 
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
