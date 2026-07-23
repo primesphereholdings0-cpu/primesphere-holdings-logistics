@@ -52,8 +52,8 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
     );
   }, [contracts, customerId]);
 
-  // Auto-calculate total TZS
-  const totalTzs = useMemo(() => {
+  // Auto-calculate subtotal (excl. VAT)
+  const subtotal = useMemo(() => {
     const km = Number(plannedKm) || 0;
     const qty = Number(quantity) || 0;
     const r = Number(rate) || 0;
@@ -63,6 +63,9 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
       return r * qty;
     }
   }, [tripType, plannedKm, quantity, rate]);
+
+  const vatAmount = subtotal * 0.18;
+  const totalWithVat = subtotal + vatAmount;
 
   const createTrip = useMutation({
     mutationFn: async () => {
@@ -75,7 +78,7 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
           vehicle_id: vehicleId || null,
           driver_id: driverId || null,
           customer_id: customerId || null,
-          contract_id: contractId || null, // now linked to the contract
+          contract_id: contractId || null,
           planned_km: Number(plannedKm) || 0,
           dispatch_date: new Date().toISOString().slice(0, 10),
           status: "Dispatched",
@@ -88,17 +91,19 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
         .single();
       if (e1) throw e1;
 
+      // Store only the subtotal in contract_amount (VAT is added at invoice level)
       const { error: e2 } = await supabase
         .from("trip_financials")
         .insert({
           trip_id: trip.id,
           contract_currency: "TZS",
-          contract_amount: totalTzs,
+          contract_amount: subtotal,
           fx_exchange_rate: 1,
           advance_input_type: "percentage",
           advance_value: 0,
           advance_paid_usd: 0,
           advance_paid_tzs: 0,
+          customer_paid_tzs: 0,
         });
       if (e2) throw e2;
 
@@ -127,7 +132,7 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
         <DialogHeader>
           <DialogTitle>Dispatch new local trip</DialogTitle>
           <DialogDescription>
-            For domestic routes – fill in the details and the total will be auto‑calculated in TZS.
+            For domestic routes – fill in the details. The total will be auto‑calculated in TZS (excl. VAT).
           </DialogDescription>
         </DialogHeader>
 
@@ -175,7 +180,7 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
                 value={customerId}
                 onValueChange={(v) => {
                   setCustomerId(v);
-                  setContractId(""); // reset contract when customer changes
+                  setContractId("");
                 }}
               >
                 <SelectTrigger><SelectValue placeholder="Select customer" /></SelectTrigger>
@@ -273,20 +278,36 @@ export function NewLocalTripDialog({ trigger, onSuccess }: NewLocalTripDialogPro
               />
             </div>
             <div className="grid gap-1.5">
-              <Label>Total contract (TZS)</Label>
+              <Label>Subtotal (excl. VAT)</Label>
               <div className="rounded-md bg-muted/40 px-3 py-2 text-lg font-bold text-primary tabular">
-                {fmtTZS(totalTzs)}
+                {fmtTZS(subtotal)}
               </div>
-              <p className="text-[11px] text-muted-foreground">Auto‑calculated</p>
             </div>
           </div>
+
+          {/* VAT breakdown */}
+          {subtotal > 0 && (
+            <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">VAT (18%)</span>
+                <span className="font-medium">{fmtTZS(vatAmount)}</span>
+              </div>
+              <div className="flex justify-between text-lg font-bold border-t pt-2">
+                <span>Total with VAT</span>
+                <span className="text-primary">{fmtTZS(totalWithVat)}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                * VAT will be added at invoice level
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
           <Button
             onClick={() => createTrip.mutate()}
-            disabled={!vehicleId || !driverId || !customerId || !route || !quantity || !rate || totalTzs === 0 || createTrip.isPending}
+            disabled={!vehicleId || !driverId || !customerId || !route || !quantity || !rate || subtotal === 0 || createTrip.isPending}
             className="gap-2"
           >
             {createTrip.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
