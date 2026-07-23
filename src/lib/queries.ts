@@ -48,6 +48,11 @@ export type Trip = {
   settled_at: string | null;
   audited_at: string | null;
   created_at: string;
+  // NEW: local trip fields
+  trip_type: string; // 'border' or 'local'
+  quantity: number;
+  rate_per_unit: number;
+  local_calculation_type: string; // 'two_way' or 'one_way'
 };
 
 export type TripFinancial = {
@@ -97,6 +102,12 @@ export type Contract = {
   end_date: string | null;
   status: string;
   created_at: string;
+  // NEW: contract type for local
+  contract_type?: string; // 'border' or 'local'
+  renewal_date?: string | null;
+  termination_date?: string | null;
+  notice_period_days?: number | null;
+  auto_renew?: boolean;
 };
 
 export type CompanySettings = {
@@ -471,7 +482,7 @@ export const financeOverviewQuery = queryOptions({
       { data: pays },
       { data: drivers },
       { data: contracts },
-      { data: maintenance }, // <-- NEW: fetch maintenance records
+      { data: maintenance },
     ] = await Promise.all([
       supabase.from("trips").select("*"),
       supabase.from("trip_financials").select("*"),
@@ -479,10 +490,9 @@ export const financeOverviewQuery = queryOptions({
       supabase.from("driver_payments").select("*"),
       supabase.from("drivers").select("*"),
       supabase.from("contracts").select("*"),
-      supabase.from("vehicle_maintenance").select("cost_tzs, status"), // <-- NEW
+      supabase.from("vehicle_maintenance").select("cost_tzs, status"),
     ]);
 
-    // Compute total maintenance cost for completed jobs
     const maintenanceCost = (maintenance ?? [])
       .filter((m) => m.status === "Completed")
       .reduce((sum, m) => sum + Number(m.cost_tzs), 0);
@@ -494,7 +504,7 @@ export const financeOverviewQuery = queryOptions({
       payments: (pays ?? []) as DriverPayment[],
       drivers: (drivers ?? []) as Driver[],
       contracts: (contracts ?? []) as Contract[],
-      maintenanceCost, // <-- NEW
+      maintenanceCost,
     };
   },
 });
