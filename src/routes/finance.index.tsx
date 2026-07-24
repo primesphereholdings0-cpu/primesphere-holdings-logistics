@@ -36,12 +36,19 @@ function FinancePage() {
       return true;
     };
 
-    const allTrips = data.trips.filter((t) => inRange(t.dispatch_date));
-    const borderTrips = allTrips.filter((t) => t.trip_type !== "local");
-    const localTrips = allTrips.filter((t) => t.trip_type === "local");
+    // Use data directly – it already has separate border/local objects
+    const border = data.border;
+    const local = data.local;
 
-    const borderTripIds = new Set(borderTrips.map((t) => t.id));
-    const localTripIds = new Set(localTrips.map((t) => t.id));
+    // Filter trips by date range if needed (the query already filters? No, we need to apply date filters here as well)
+    // We'll filter trips inside each object, but they are already filtered in the query? 
+    // The query doesn't accept date params, so we filter here.
+    const filteredBorderTrips = border.trips.filter((t) => inRange(t.dispatch_date));
+    const filteredLocalTrips = local.trips.filter((t) => inRange(t.dispatch_date));
+
+    // Recalculate based on filtered trips
+    const borderTripIds = new Set(filteredBorderTrips.map((t) => t.id));
+    const localTripIds = new Set(filteredLocalTrips.map((t) => t.id));
 
     const borderFins = data.financials.filter((f) => borderTripIds.has(f.trip_id));
     const localFins = data.financials.filter((f) => localTripIds.has(f.trip_id));
@@ -49,16 +56,23 @@ function FinancePage() {
     const borderExps = data.expenses.filter((e) => borderTripIds.has(e.trip_id));
     const localExps = data.expenses.filter((e) => localTripIds.has(e.trip_id));
 
-    // Payments are shared (not separated by trip type)
+    // We also need to filter payments by date
     const pays = data.payments.filter((p) => inRange(p.payment_date));
 
-    // Border
+    // Recalculate metrics for border and local
     const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
     const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
     const borderExpensesTzs = borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
     const borderProfitTzs = borderRevenueTzs - borderExpensesTzs;
     const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
       borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+
+    // Salary and maintenance for border (we can use the precomputed from data, but we need to filter drivers by type?)
+    // The query already splits salary based on driver_type and maintenance based on trip_type, but we need to filter by date? 
+    // Salary and maintenance are not date-sensitive in the query, so we keep them as is.
+    const borderSalary = data.border.salary; // already computed
+    const borderMaintenance = data.border.maintenance; // already computed
+    const borderNetProfit = borderProfitTzs - borderSalary - borderMaintenance;
 
     // Local
     const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
@@ -67,16 +81,18 @@ function FinancePage() {
     const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
       localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
 
+    const localSalary = data.local.salary;
+    const localMaintenance = data.local.maintenance;
+    const localNetProfit = localProfitTzs - localSalary - localMaintenance;
+
     // Shared
     const salary = pays.filter((p) => p.payment_type === "Salary").reduce((s, p) => s + Number(p.amount_tzs), 0);
     const activeContracts = data.contracts.filter((c) => c.status === "Active").length;
-    const maintenanceCost = data.maintenanceCost ?? 0;
-    const borderProfitAfterMaintenance = borderProfitTzs - maintenanceCost;
-    const localProfitAfterMaintenance = localProfitTzs - maintenanceCost;
+    const totalMaintenance = borderMaintenance + localMaintenance;
 
     return {
       border: {
-        trips: borderTrips,
+        trips: filteredBorderTrips,
         fins: borderFins,
         exps: borderExps,
         revenueUsd: borderRevenueUsd,
@@ -84,22 +100,26 @@ function FinancePage() {
         expensesTzs: borderExpensesTzs,
         profitTzs: borderProfitTzs,
         outstandingAdv: borderOutstandingAdv,
-        profitAfterMaintenance: borderProfitAfterMaintenance,
+        salary: borderSalary,
+        maintenance: borderMaintenance,
+        netProfit: borderNetProfit,
       },
       local: {
-        trips: localTrips,
+        trips: filteredLocalTrips,
         fins: localFins,
         exps: localExps,
         revenueTzs: localRevenueTzs,
         expensesTzs: localExpensesTzs,
         profitTzs: localProfitTzs,
         outstandingAdv: localOutstandingAdv,
-        profitAfterMaintenance: localProfitAfterMaintenance,
+        salary: localSalary,
+        maintenance: localMaintenance,
+        netProfit: localNetProfit,
       },
-      pays, // <-- include pays for salary calculations
+      pays,
       salary,
       activeContracts,
-      maintenanceCost,
+      totalMaintenance,
     };
   }, [data, from, to]);
 
@@ -139,15 +159,19 @@ function FinancePage() {
     };
   });
 
-  // Driver advance report (based on border trips only, but can be extended)
+  // Driver advance report – using all trips (border + local) because advances can be on any trip
+  const allTrips = [...view.border.trips, ...view.local.trips];
+  const allFins = [...view.border.fins, ...view.local.fins];
+  const allExps = [...view.border.exps, ...view.local.exps];
+
   const advanceRep = data.drivers.map((d) => {
-    const dtrips = view.border.trips.filter((t) => t.driver_id === d.id);
-    const adv = dtrips.reduce((s, t) => s + Number(view.border.fins.find((f) => f.trip_id === t.id)?.advance_paid_tzs ?? 0), 0);
-    const spent = view.border.exps.filter((e) => e.status === "Verified" && dtrips.some((t) => t.id === e.trip_id)).reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const dtrips = allTrips.filter((t) => t.driver_id === d.id);
+    const adv = dtrips.reduce((s, t) => s + Number(allFins.find((f) => f.trip_id === t.id)?.advance_paid_tzs ?? 0), 0);
+    const spent = allExps.filter((e) => e.status === "Verified" && dtrips.some((t) => t.id === e.trip_id)).reduce((s, e) => s + Number(e.amount_tzs), 0);
     return { driver: d.full_name, trips: dtrips.length, advance_tzs: adv, spent_tzs: spent, outstanding_tzs: adv - spent };
   });
 
-  // Salary report (all drivers, all payments)
+  // Salary report – all drivers
   const salaryRep = data.drivers.map((d) => {
     const paid = (view.pays || [])
       .filter((p) => p.driver_id === d.id && p.payment_type === "Salary")
@@ -155,9 +179,7 @@ function FinancePage() {
     return { driver: d.full_name, base_salary_tzs: d.monthly_salary_tzs, paid_tzs: paid };
   });
 
-  // Fuel consumption (all trips)
-  const allTrips = [...view.border.trips, ...view.local.trips];
-  const allExps = [...view.border.exps, ...view.local.exps];
+  // Fuel consumption
   const fuelRep = allExps.filter((e) => e.category === "Fuel").map((e) => ({
     trip_code: allTrips.find((t) => t.id === e.trip_id)?.trip_code ?? "—",
     driver: driverMap.get(allTrips.find((t) => t.id === e.trip_id)?.driver_id ?? "") ?? "—",
@@ -167,9 +189,9 @@ function FinancePage() {
     date: e.created_at.slice(0, 10),
   }));
 
-  // Revenue report (all trips)
+  // Revenue report
   const revenueRep = allTrips.map((t) => {
-    const f = [...view.border.fins, ...view.local.fins].find((x) => x.trip_id === t.id);
+    const f = allFins.find((x) => x.trip_id === t.id);
     return {
       trip_code: t.trip_code,
       dispatch_date: t.dispatch_date,
@@ -180,7 +202,7 @@ function FinancePage() {
     };
   });
 
-  // Expense report (all trips)
+  // Expense report
   const expenseRep = allExps.map((e) => ({
     trip_code: allTrips.find((t) => t.id === e.trip_id)?.trip_code ?? "—",
     category: e.category,
@@ -212,12 +234,13 @@ function FinancePage() {
             <h2 className="text-lg font-semibold tracking-tight">Border Operations</h2>
             <span className="text-xs text-muted-foreground">Cross‑border freight (USD/TZS)</span>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             <KPI icon={<DollarSign className="h-4 w-4" />} label="Revenue" value={fmtUSD(view.border.revenueUsd)} sub={fmtTZS(view.border.revenueTzs)} tone="primary" />
-            <KPI icon={<TrendingDown className="h-4 w-4" />} label="Expenses" value={fmtTZS(view.border.expensesTzs)} sub="Verified only" tone="warning" />
+            <KPI icon={<TrendingDown className="h-4 w-4" />} label="Expenses" value={fmtTZS(view.border.expensesTzs)} sub="Verified" tone="warning" />
             <KPI icon={<TrendingUp className="h-4 w-4" />} label="Profit" value={fmtTZS(view.border.profitTzs)} sub="Revenue − expenses" tone={view.border.profitTzs >= 0 ? "success" : "destructive"} />
-            <KPI icon={<Wrench className="h-4 w-4" />} label="Maintenance" value={fmtTZS(view.maintenanceCost)} sub="Completed jobs" tone="accent" />
-            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net Profit" value={fmtTZS(view.border.profitAfterMaintenance)} sub="Profit − maintenance" tone={view.border.profitAfterMaintenance >= 0 ? "success" : "destructive"} />
+            <KPI icon={<Users className="h-4 w-4" />} label="Salary" value={fmtTZS(view.border.salary)} sub="Border drivers" tone="accent" />
+            <KPI icon={<Wrench className="h-4 w-4" />} label="Maintenance" value={fmtTZS(view.border.maintenance)} sub="Border maintenance" tone="accent" />
+            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net Profit" value={fmtTZS(view.border.netProfit)} sub="After salary & maintenance" tone={view.border.netProfit >= 0 ? "success" : "destructive"} />
             <KPI icon={<Wallet className="h-4 w-4" />} label="Outstanding Adv." value={fmtTZS(view.border.outstandingAdv)} sub="Advance − spent" tone="warning" />
           </div>
         </div>
@@ -229,21 +252,22 @@ function FinancePage() {
             <h2 className="text-lg font-semibold tracking-tight">Local Operations</h2>
             <span className="text-xs text-muted-foreground">Domestic routes (TZS)</span>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
             <KPI icon={<DollarSign className="h-4 w-4" />} label="Revenue" value={fmtTZS(view.local.revenueTzs)} sub="Local trips" tone="primary" />
-            <KPI icon={<TrendingDown className="h-4 w-4" />} label="Expenses" value={fmtTZS(view.local.expensesTzs)} sub="Verified only" tone="warning" />
+            <KPI icon={<TrendingDown className="h-4 w-4" />} label="Expenses" value={fmtTZS(view.local.expensesTzs)} sub="Verified" tone="warning" />
             <KPI icon={<TrendingUp className="h-4 w-4" />} label="Profit" value={fmtTZS(view.local.profitTzs)} sub="Revenue − expenses" tone={view.local.profitTzs >= 0 ? "success" : "destructive"} />
-            <KPI icon={<Wrench className="h-4 w-4" />} label="Maintenance" value={fmtTZS(view.maintenanceCost)} sub="Completed jobs" tone="accent" />
-            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net Profit" value={fmtTZS(view.local.profitAfterMaintenance)} sub="Profit − maintenance" tone={view.local.profitAfterMaintenance >= 0 ? "success" : "destructive"} />
+            <KPI icon={<Users className="h-4 w-4" />} label="Salary" value={fmtTZS(view.local.salary)} sub="Local drivers" tone="accent" />
+            <KPI icon={<Wrench className="h-4 w-4" />} label="Maintenance" value={fmtTZS(view.local.maintenance)} sub="Local maintenance" tone="accent" />
+            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net Profit" value={fmtTZS(view.local.netProfit)} sub="After salary & maintenance" tone={view.local.netProfit >= 0 ? "success" : "destructive"} />
             <KPI icon={<Wallet className="h-4 w-4" />} label="Outstanding Adv." value={fmtTZS(view.local.outstandingAdv)} sub="Advance − spent" tone="warning" />
           </div>
         </div>
 
         {/* Shared KPIs */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-          <KPI icon={<Users className="h-4 w-4" />} label="Salary costs" value={fmtTZS(view.salary)} sub="Payments in range" tone="accent" />
+          <KPI icon={<Users className="h-4 w-4" />} label="Total Salary" value={fmtTZS(view.salary)} sub="All drivers" tone="accent" />
           <KPI icon={<FileText className="h-4 w-4" />} label="Active contracts" value={String(view.activeContracts)} sub="Signed & running" tone="primary" />
-          <KPI icon={<Wrench className="h-4 w-4" />} label="Total maintenance" value={fmtTZS(view.maintenanceCost)} sub="All completed jobs" tone="accent" />
+          <KPI icon={<Wrench className="h-4 w-4" />} label="Total maintenance" value={fmtTZS(view.totalMaintenance)} sub="All completed jobs" tone="accent" />
         </div>
 
         <Tabs defaultValue="border">
