@@ -47,10 +47,10 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
   const [advanceType, setAdvanceType] = useState<"percentage" | "fixed">("percentage");
   const [advanceValue, setAdvanceValue] = useState("70");
 
-  // --- FUEL ESTIMATION ---
+  // --- FUEL ESTIMATION (0.5 L/km) for border trips ---
   const estimatedFuel = useMemo(() => {
     const km = Number(plannedKm || 0);
-    return km * 0.05; // 0.05 L per km
+    return km * 0.5; // 0.5 L per km
   }, [plannedKm]);
 
   // Pre-fill when initialData is provided (edit mode)
@@ -132,6 +132,10 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
         planned_km: Number(plannedKm || 0),
         dispatch_date: new Date().toISOString().slice(0, 10),
         status: initialData ? initialData.status : "Dispatched",
+        trip_type: "border",
+        quantity: 0,
+        rate_per_unit: 0,
+        local_calculation_type: "",
       };
       let tripId: string;
       if (initialData) {
@@ -295,9 +299,8 @@ export function NewTripDialog({ initialData, onClose, trigger }: NewTripDialogPr
                 value={plannedKm}
                 onChange={(e) => setPlannedKm(e.target.value)}
               />
-              {/* Fuel estimation helper */}
               <div className="text-[11px] text-muted-foreground mt-1">
-                Estimated fuel: <span className="font-medium text-foreground">{estimatedFuel.toFixed(1)} L</span> (0.05 L/km)
+                Estimated fuel: <span className="font-medium text-foreground">{estimatedFuel.toFixed(1)} L</span> (0.5 L/km)
               </div>
             </div>
           </div>
