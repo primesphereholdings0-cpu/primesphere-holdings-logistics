@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { invoiceDetailQuery } from "@/lib/queries";
+import { invoiceDetailQuery, companySettingsQuery } from "@/lib/queries";
 import { fmtTZS } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { StatusBadge } from "@/components/fleet/StatusBadge";
@@ -29,6 +29,7 @@ function InvoiceDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery(invoiceDetailQuery(invoiceId));
+  const { data: company } = useQuery(companySettingsQuery);
   const [paymentAmount, setPaymentAmount] = useState("");
 
   const markSent = useMutation({
@@ -78,6 +79,13 @@ function InvoiceDetailPage() {
   const { invoice_number, customer, trips, period_start, period_end, subtotal_tzs, vat_amount_tzs, total_amount_tzs, paid_amount_tzs, status } = data;
   const balance = total_amount_tzs - paid_amount_tzs;
 
+  // Company details from settings
+  const companyName = company?.company_name || "Primesphere Holdings Logistics";
+  const companyAddress = company?.address || "";
+  const companyPhone = company?.phone || "";
+  const companyEmail = company?.email || "";
+  const companyTin = company?.tin || "";
+
   return (
     <div className="min-h-screen bg-background">
       <style>{`
@@ -115,7 +123,7 @@ function InvoiceDetailPage() {
         }
       `}</style>
 
-      {/* Header – hidden when printing */}
+      {/* Page header – hidden when printing */}
       <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between gap-3 flex-wrap print-hidden">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/invoices" })} className="h-8 w-8">
@@ -146,7 +154,7 @@ function InvoiceDetailPage() {
 
       <main className="mx-auto max-w-4xl px-4 md:px-6 py-6 print:px-0 print:py-0">
         <div className="invoice-container relative overflow-hidden rounded-xl border bg-white shadow-sm print:shadow-none print:border-0 print:rounded-none">
-          {/* Top banner */}
+          {/* Top banner with company details */}
           <div
             className="relative px-8 pt-8 pb-14"
             style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #023296 55%, ${NAVY} 100%)` }}
@@ -154,7 +162,11 @@ function InvoiceDetailPage() {
             <div className="relative z-10 flex items-start justify-between">
               <div>
                 <h1 className="text-4xl font-bold tracking-tight text-white">INVOICE</h1>
-                <p className="mt-1 text-sm text-white/80">Primesphere Holdings Logistics</p>
+                <p className="mt-1 text-sm font-semibold text-white/90">{companyName}</p>
+                {companyAddress && <p className="text-xs text-white/70">{companyAddress}</p>}
+                {companyPhone && <p className="text-xs text-white/70">{companyPhone}</p>}
+                {companyEmail && <p className="text-xs text-white/70">{companyEmail}</p>}
+                {companyTin && <p className="text-xs text-white/70">TIN: {companyTin}</p>}
               </div>
               <div className="text-right">
                 <p className="text-sm font-bold" style={{ color: GOLD }}>{invoice_number}</p>
@@ -265,7 +277,7 @@ function InvoiceDetailPage() {
               <path d="M0,30 C150,0 450,60 600,30 L600,0 L0,0 Z" fill="white" />
             </svg>
             <div className="relative z-10 text-center">
-              <p className="text-xs text-white/80">Primesphere Holdings Logistics · Thank you for your business</p>
+              <p className="text-xs text-white/80">{companyName} · Thank you for your business</p>
               <p className="mt-1 text-xs text-white/60">Payment is due within 30 days from the invoice date.</p>
             </div>
           </div>
