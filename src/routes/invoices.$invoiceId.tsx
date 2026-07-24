@@ -21,6 +21,9 @@ export const Route = createFileRoute("/invoices/$invoiceId")({
   }),
 });
 
+const NAVY = "#011F7B";
+const GOLD = "#FFBA09";
+
 function InvoiceDetailPage() {
   const { invoiceId } = Route.useParams();
   const navigate = useNavigate();
@@ -77,7 +80,36 @@ function InvoiceDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between gap-3 flex-wrap print:hidden">
+      {/* Print styles – hide everything except the invoice container */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .invoice-container, .invoice-container * {
+            visibility: visible;
+          }
+          .invoice-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            background: white !important;
+            box-shadow: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            overflow: visible !important;
+          }
+          .print-hidden {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* Page header – hidden when printing */}
+      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between gap-3 flex-wrap print-hidden">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/invoices" })} className="h-8 w-8">
             <ArrowLeft className="h-4 w-4" />
@@ -93,7 +125,7 @@ function InvoiceDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 print-hidden">
           {status === "Draft" && (
             <Button size="sm" onClick={() => markSent.mutate()} className="gap-2">
               <Send className="h-4 w-4" /> Mark Sent
@@ -105,100 +137,143 @@ function InvoiceDetailPage() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-4xl px-4 md:px-6 py-6">
+      <main className="mx-auto max-w-4xl px-4 md:px-6 py-6 print:px-0 print:py-0">
         {/* Invoice content – this is what gets printed */}
-        <div className="invoice-container rounded-xl border bg-white p-8 shadow-sm print:shadow-none print:border-0">
-          {/* Header with colors */}
-          <div className="flex items-center justify-between border-b-4 pb-4" style={{ borderColor: "#011F7B" }}>
-            <div>
-              <h1 className="text-3xl font-bold" style={{ color: "#011F7B" }}>INVOICE</h1>
-              <p className="text-sm text-muted-foreground">Primesphere Holdings Logistics</p>
+        <div className="invoice-container relative overflow-hidden rounded-xl border bg-white shadow-sm print:shadow-none print:border-0 print:rounded-none">
+          {/* Top wave banner */}
+          <div
+            className="relative px-8 pt-8 pb-14"
+            style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #023296 55%, ${NAVY} 100%)` }}
+          >
+            <div className="relative z-10 flex items-start justify-between">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight text-white">INVOICE</h1>
+                <p className="mt-1 text-sm text-white/70">Primesphere Holdings Logistics</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-semibold" style={{ color: GOLD }}>{invoice_number}</p>
+                <p className="text-xs text-white/70">Date: {new Date().toLocaleDateString()}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-semibold" style={{ color: "#011F7B" }}>{invoice_number}</p>
-              <p className="text-xs text-muted-foreground">Date: {new Date().toLocaleDateString()}</p>
-            </div>
+            <svg
+              className="absolute bottom-0 left-0 w-full"
+              viewBox="0 0 600 60"
+              preserveAspectRatio="none"
+              style={{ height: "48px" }}
+            >
+              <path d="M0,30 C150,60 450,0 600,28 L600,60 L0,60 Z" fill="white" />
+            </svg>
           </div>
 
-          {/* Customer & Period */}
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Bill to</p>
-              <p className="font-semibold" style={{ color: "#011F7B" }}>{customer?.company_name || "—"}</p>
-              {customer?.address && <p className="text-sm">{customer.address}</p>}
-              {customer?.phone && <p className="text-sm">{customer.phone}</p>}
+          <div className="px-8 pb-8">
+            {/* Bill to / Period */}
+            <div className="mt-2 grid grid-cols-2 gap-4">
+              <div className="rounded-md border px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY }}>Bill to</p>
+                <p className="mt-1 font-semibold" style={{ color: NAVY }}>{customer?.company_name || "—"}</p>
+                {customer?.address && <p className="text-sm text-muted-foreground">{customer.address}</p>}
+                {customer?.phone && <p className="text-sm text-muted-foreground">{customer.phone}</p>}
+              </div>
+              <div className="rounded-md border px-4 py-3 text-right">
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY }}>Period</p>
+                <p className="mt-1 font-medium">
+                  {new Date(period_start).toLocaleDateString()} – {new Date(period_end).toLocaleDateString()}
+                </p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Period</p>
-              <p className="font-medium">
-                {new Date(period_start).toLocaleDateString()} – {new Date(period_end).toLocaleDateString()}
-              </p>
-            </div>
-          </div>
 
-          {/* Trips table */}
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b-2" style={{ borderColor: "#FFBA09" }}>
-                  <th className="py-2 text-left font-semibold" style={{ color: "#011F7B" }}>Trip</th>
-                  <th className="py-2 text-left font-semibold" style={{ color: "#011F7B" }}>Route</th>
-                  <th className="py-2 text-left font-semibold" style={{ color: "#011F7B" }}>Vehicle</th>
-                  <th className="py-2 text-right font-semibold" style={{ color: "#011F7B" }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trips?.map((t) => (
-                  <tr key={t.id} className="border-b">
-                    <td className="py-2 font-mono text-xs">{t.trip_code}</td>
-                    <td className="py-2">{t.origin_destination}</td>
-                    <td className="py-2">{t.vehicle?.reg_number || "—"}</td>
-                    <td className="py-2 text-right">{fmtTZS(t.financial?.contract_amount)}</td>
+            {/* Trips table */}
+            <div className="mt-6 overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ backgroundColor: NAVY }}>
+                    <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Trip</th>
+                    <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Route</th>
+                    <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Vehicle</th>
+                    <th className="py-2.5 px-3 text-right text-xs font-semibold uppercase tracking-wider text-white">Amount</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={3} className="py-2 text-right font-medium">Subtotal</td>
-                  <td className="py-2 text-right">{fmtTZS(subtotal_tzs)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={3} className="py-2 text-right">VAT (18%)</td>
-                  <td className="py-2 text-right">{fmtTZS(vat_amount_tzs)}</td>
-                </tr>
-                <tr className="border-t-2" style={{ borderColor: "#011F7B" }}>
-                  <td colSpan={3} className="py-2 text-right text-lg font-bold" style={{ color: "#011F7B" }}>Total</td>
-                  <td className="py-2 text-right text-lg font-bold" style={{ color: "#011F7B" }}>{fmtTZS(total_amount_tzs)}</td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody>
+                  {trips?.map((t) => (
+                    <tr key={t.id} className="border-b last:border-b-0">
+                      <td className="py-2 px-3 font-mono text-xs">{t.trip_code}</td>
+                      <td className="py-2 px-3">{t.origin_destination}</td>
+                      <td className="py-2 px-3">{t.vehicle?.reg_number || "—"}</td>
+                      <td className="py-2 px-3 text-right">{fmtTZS(t.financial?.contract_amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals */}
+            <div className="mt-6 flex justify-end">
+              <div className="w-full max-w-xs">
+                <div className="rounded-md border">
+                  <div className="flex justify-between px-4 py-2 text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>{fmtTZS(subtotal_tzs)}</span>
+                  </div>
+                  <div className="flex justify-between border-t px-4 py-2 text-sm">
+                    <span className="text-muted-foreground">VAT (18%)</span>
+                    <span>{fmtTZS(vat_amount_tzs)}</span>
+                  </div>
+                </div>
+                <div
+                  className="mt-3 flex items-center justify-between rounded-md px-4 py-3"
+                  style={{ backgroundColor: NAVY }}
+                >
+                  <span className="text-sm font-bold uppercase tracking-wider text-white">Total</span>
+                  <span className="text-lg font-bold text-white">{fmtTZS(total_amount_tzs)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment status */}
+            <div className="mt-6 flex items-center justify-between rounded-md border-l-4 bg-muted/30 px-4 py-3" style={{ borderColor: GOLD }}>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment status</p>
+                <p className="font-semibold" style={{ color: paid_amount_tzs >= total_amount_tzs ? "#10b981" : GOLD }}>
+                  {status}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount paid</p>
+                <p className="font-semibold">{fmtTZS(paid_amount_tzs)}</p>
+                <p className="text-xs text-muted-foreground">Balance: {fmtTZS(balance)}</p>
+              </div>
+            </div>
+
+            {/* Terms */}
+            <div className="mt-6 border-t pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY }}>Terms and conditions</p>
+              <p className="mt-1 text-xs text-muted-foreground">Payment is due within 30 days from the invoice date.</p>
+            </div>
           </div>
 
-          {/* Payment status */}
-          <div className="mt-6 flex items-center justify-between border-t-2 pt-4" style={{ borderColor: "#FFBA09" }}>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Payment status</p>
-              <p className="font-semibold" style={{ color: paid_amount_tzs >= total_amount_tzs ? "#10b981" : "#FFBA09" }}>
-                {status}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Amount paid</p>
-              <p className="font-semibold">{fmtTZS(paid_amount_tzs)}</p>
-              <p className="text-xs text-muted-foreground">Balance: {fmtTZS(balance)}</p>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-6 border-t pt-4 text-center text-xs text-muted-foreground" style={{ borderColor: "#011F7B" }}>
-            <p>Primesphere Holdings Logistics · Thank you for your business</p>
+          {/* Bottom wave footer */}
+          <div
+            className="relative mt-2 pt-9 pb-5"
+            style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #023296 55%, ${NAVY} 100%)` }}
+          >
+            <svg
+              className="absolute top-0 left-0 w-full"
+              viewBox="0 0 600 60"
+              preserveAspectRatio="none"
+              style={{ height: "40px", transform: "scaleY(-1)" }}
+            >
+              <path d="M0,30 C150,0 450,60 600,30 L600,0 L0,0 Z" fill="white" />
+            </svg>
+            <p className="relative z-10 text-center text-xs text-white/80">
+              Primesphere Holdings Logistics · Thank you for your business
+            </p>
           </div>
         </div>
       </main>
 
       {/* Record payment – hidden when printing */}
       {status !== "Paid" && (
-        <div className="mx-auto max-w-4xl px-4 md:px-6 pb-6 print:hidden">
+        <div className="mx-auto max-w-4xl px-4 md:px-6 pb-6 print-hidden">
           <div className="rounded-xl border bg-card p-4 max-w-md">
             <h3 className="text-sm font-semibold mb-3">Record payment</h3>
             <div className="flex gap-3">
