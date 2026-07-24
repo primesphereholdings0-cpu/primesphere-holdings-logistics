@@ -2,9 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Download, DollarSign, TrendingDown, TrendingUp, Wallet, Users, FileText, Wrench } from "lucide-react";
-import {
-  ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, BarChart, Bar, Legend,
-} from "recharts";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -53,34 +50,11 @@ function FinancePage() {
     const salary = pays.filter((p) => p.payment_type === "Salary").reduce((s, p) => s + Number(p.amount_tzs), 0);
     const activeContracts = data.contracts.filter((c) => c.status === "Active").length;
 
-    // --- NEW: maintenance costs ---
     const maintenanceCost = data.maintenanceCost ?? 0;
     const profitAfterMaintenance = profitTzs - maintenanceCost;
 
-    // monthly buckets
-    const monthly = new Map<string, { rev: number; exp: number; fuel: number }>();
-    for (const f of fins) {
-      const t = trips.find((x) => x.id === f.trip_id);
-      const key = (t?.dispatch_date ?? "").slice(0, 7) || "unknown";
-      const m = monthly.get(key) ?? { rev: 0, exp: 0, fuel: 0 };
-      m.rev += Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate));
-      monthly.set(key, m);
-    }
-    for (const e of exps) {
-      if (e.status !== "Verified") continue;
-      const t = trips.find((x) => x.id === e.trip_id);
-      const key = (t?.dispatch_date ?? e.created_at.slice(0, 10)).slice(0, 7);
-      const m = monthly.get(key) ?? { rev: 0, exp: 0, fuel: 0 };
-      m.exp += Number(e.amount_tzs);
-      if (e.category === "Fuel") m.fuel += Number(e.amount_tzs);
-      monthly.set(key, m);
-    }
-    const chart = [...monthly.entries()]
-      .filter(([k]) => k !== "unknown")
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, v]) => ({ month, revenue: Math.round(v.rev), expenses: Math.round(v.exp), profit: Math.round(v.rev - v.exp), fuel: Math.round(v.fuel) }));
-
-    return { trips, fins, exps, pays, revenueTzs, revenueUsd, expensesTzs, profitTzs, outstandingAdv, salary, activeContracts, chart, maintenanceCost, profitAfterMaintenance };
+    // We no longer need monthly chart data
+    return { trips, fins, exps, pays, revenueTzs, revenueUsd, expensesTzs, profitTzs, outstandingAdv, salary, activeContracts, maintenanceCost, profitAfterMaintenance };
   }, [data, from, to]);
 
   if (!data || !view) return <div className="min-h-screen bg-background"><div className="p-10 text-muted-foreground">Loading…</div></div>;
@@ -144,6 +118,7 @@ function FinancePage() {
           <Button variant="ghost" size="sm" onClick={() => { setFrom(""); setTo(""); }}>Reset</Button>
         </div>
 
+        {/* Main KPI row */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 mb-8">
           <KPI icon={<DollarSign className="h-4 w-4" />} label="Total revenue" value={fmtTZS(view.revenueTzs)} sub={fmtUSD(view.revenueUsd)} tone="primary" />
           <KPI icon={<TrendingDown className="h-4 w-4" />} label="Trip expenses" value={fmtTZS(view.expensesTzs)} sub="Verified only" tone="warning" />
@@ -152,28 +127,38 @@ function FinancePage() {
           <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net profit" value={fmtTZS(view.profitAfterMaintenance)} sub="Profit − maintenance" tone={view.profitAfterMaintenance >= 0 ? "success" : "destructive"} />
           <KPI icon={<Wallet className="h-4 w-4" />} label="Outstanding advances" value={fmtTZS(view.outstandingAdv)} sub="Advance − spent" tone="warning" />
           <KPI icon={<Users className="h-4 w-4" />} label="Salary costs" value={fmtTZS(view.salary)} sub="Payments in range" tone="accent" />
-          {/* Optionally keep active contracts if you have space, but we already have 7; you can choose to keep or remove */}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2 mb-8">
-          <ChartCard title="Monthly revenue vs expenses">
-            <BarChart data={view.chart}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="month" fontSize={11} /><YAxis fontSize={11} tickFormatter={(v) => fmtNum(v / 1000) + "k"} />
-              <Tooltip formatter={(v: number) => fmtTZS(v)} /><Legend />
-              <Bar dataKey="revenue" fill="hsl(var(--primary))" />
-              <Bar dataKey="expenses" fill="hsl(var(--destructive))" />
-            </BarChart>
-          </ChartCard>
-          <ChartCard title="Profit trend & fuel costs">
-            <LineChart data={view.chart}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="month" fontSize={11} /><YAxis fontSize={11} tickFormatter={(v) => fmtNum(v / 1000) + "k"} />
-              <Tooltip formatter={(v: number) => fmtTZS(v)} /><Legend />
-              <Line type="monotone" dataKey="profit" stroke="hsl(var(--success))" strokeWidth={2} />
-              <Line type="monotone" dataKey="fuel" stroke="hsl(var(--warning))" strokeWidth={2} />
-            </LineChart>
-          </ChartCard>
+        {/* Local Report Cards – replaces the charts */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+          <ReportCard
+            icon={<DollarSign className="h-5 w-5" />}
+            label="Revenue"
+            value={fmtTZS(view.revenueTzs)}
+            sub="Total income"
+            tone="primary"
+          />
+          <ReportCard
+            icon={<TrendingDown className="h-5 w-5" />}
+            label="Expenses"
+            value={fmtTZS(view.expensesTzs)}
+            sub="Verified trip expenses"
+            tone="warning"
+          />
+          <ReportCard
+            icon={<TrendingUp className="h-5 w-5" />}
+            label="Trip Profit"
+            value={fmtTZS(view.profitTzs)}
+            sub="Revenue − Expenses"
+            tone={view.profitTzs >= 0 ? "success" : "destructive"}
+          />
+          <ReportCard
+            icon={<Wallet className="h-5 w-5" />}
+            label="Net Profit"
+            value={fmtTZS(view.profitAfterMaintenance)}
+            sub="After maintenance costs"
+            tone={view.profitAfterMaintenance >= 0 ? "success" : "destructive"}
+          />
         </div>
 
         <Tabs defaultValue="profit">
@@ -215,13 +200,30 @@ function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: 
   );
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactElement }) {
+// New component: ReportCard (bigger, more prominent)
+function ReportCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string; sub: string; tone: "primary" | "success" | "warning" | "destructive" | "accent" }) {
+  const borderMap = {
+    primary: "border-primary/30",
+    success: "border-success/40",
+    warning: "border-warning/40",
+    destructive: "border-destructive/40",
+    accent: "border-border",
+  };
+  const iconMap = {
+    primary: "bg-primary/15 text-primary",
+    success: "bg-success/15 text-success",
+    warning: "bg-warning/25 text-warning-foreground dark:text-warning",
+    destructive: "bg-destructive/15 text-destructive",
+    accent: "bg-muted text-foreground",
+  };
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 text-sm font-semibold">{title}</div>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer>
+    <div className={cn("rounded-xl border bg-card p-5 shadow-sm", borderMap[tone])}>
+      <div className="flex items-center gap-2">
+        <div className={cn("grid h-9 w-9 place-items-center rounded-lg", iconMap[tone])}>{icon}</div>
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">{label}</div>
       </div>
+      <div className="mt-2 text-2xl font-bold tabular">{value}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>
     </div>
   );
 }
