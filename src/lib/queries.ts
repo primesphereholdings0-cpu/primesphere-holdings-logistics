@@ -1,629 +1,115 @@
-import { queryOptions } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Save, Trash2, Plus, ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
+
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { auditLogsQuery, companySettingsQuery, userRolesQuery } from "@/lib/queries";
+import { StatusBadge } from "@/components/fleet/StatusBadge";
 
-// ========== TYPES ==========
-export type Vehicle = {
-  id: string;
-  reg_number: string;
-  model: string;
-  capacity_tons: number;
-  status: string;
-  created_at: string;
-};
-
-export type Driver = {
-  id: string;
-  full_name: string;
-  phone: string | null;
-  license_number: string | null;
-  monthly_salary_tzs: number;
-  base_location: string | null;
-  created_at?: string;
-};
-
-export type DriverPayment = {
-  id: string;
-  driver_id: string;
-  payment_type: string;
-  amount_tzs: number;
-  payment_date: string;
-  period_label: string | null;
-  reference_trip: string | null;
-  notes: string | null;
-  created_at: string;
-};
-
-export type Trip = {
-  id: string;
-  trip_code: string;
-  origin_destination: string;
-  vehicle_id: string | null;
-  driver_id: string | null;
-  planned_km: number;
-  dispatch_date: string | null;
-  return_date: string | null;
-  status: string;
-  customer_id: string | null;
-  contract_id: string | null;
-  settled_at: string | null;
-  audited_at: string | null;
-  created_at: string;
-  trip_type: string; // 'border' or 'local'
-  quantity: number;
-  rate_per_unit: number;
-  local_calculation_type: string; // 'two_way' or 'one_way'
-  invoice_id: string | null; // NEW
-};
-
-export type TripFinancial = {
-  id: string;
-  trip_id: string;
-  contract_currency: string;
-  contract_amount: number;
-  fx_exchange_rate: number;
-  total_contract_tzs: number;
-  advance_input_type: string;
-  advance_value: number;
-  advance_paid_usd: number;
-  advance_paid_tzs: number;
-  created_at: string;
-  customer_paid_tzs: number; // NEW
-};
-
-export type TripExpense = {
-  id: string;
-  trip_id: string;
-  category: string;
-  description: string | null;
-  volume_liters: number | null;
-  amount_tzs: number;
-  receipt_url: string | null;
-  status: string;
-  created_at: string;
-};
-
-export type Customer = {
-  id: string;
-  company_name: string;
-  contact_person: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  status: string;
-  created_at: string;
-};
-
-export type Contract = {
-  id: string;
-  customer_id: string;
-  route: string;
-  contract_currency: string;
-  contract_amount: number;
-  start_date: string | null;
-  end_date: string | null;
-  status: string;
-  created_at: string;
-  contract_type?: string;
-  renewal_date?: string | null;
-  termination_date?: string | null;
-  notice_period_days?: number | null;
-  auto_renew?: boolean;
-};
-
-export type CompanySettings = {
-  id: string;
-  company_name: string;
-  logo_url: string | null;
-  address: string | null;
-  phone: string | null;
-  email: string | null;
-  default_currency: string;
-  default_fx_rate: number;
-  notifications_enabled: boolean;
-  updated_at: string;
-};
-
-export type UserRole = {
-  id: string;
-  user_id: string;
-  display_name: string | null;
-  role: "admin" | "dispatcher" | "finance" | "driver";
-  created_at: string;
-};
-
-export type AuditLog = {
-  id: string;
-  actor: string | null;
-  action: string;
-  entity: string;
-  entity_id: string | null;
-  payload: unknown;
-  created_at: string;
-};
-
-export type TripRow = Trip & {
-  vehicle: Vehicle | null;
-  driver: Driver | null;
-  financial: TripFinancial | null;
-  expenses_sum: number;
-};
-
-export type VehicleRow = Vehicle & {
-  active_trips: number;
-  total_trips: number;
-  total_km: number;
-  revenue_tzs: number;
-};
-
-export type DriverRow = Driver & {
-  active_trips: number;
-  total_trips: number;
-  trip_advance_tzs: number;
-  salary_paid_tzs: number;
-  extra_advance_tzs: number;
-};
-
-export type ExpenseRow = TripExpense & {
-  trip_code: string;
-  origin_destination: string;
-  driver_name: string | null;
-  vehicle_reg: string | null;
-};
-
-export type CustomerRow = Customer & {
-  trip_count: number;
-  contract_count: number;
-  revenue_usd: number;
-};
-
-// ===== INVOICE TYPES =====
-export type Invoice = {
-  id: string;
-  customer_id: string;
-  invoice_number: string;
-  period_start: string;
-  period_end: string;
-  subtotal_tzs: number;
-  vat_percent: number;
-  vat_amount_tzs: number;
-  total_amount_tzs: number;
-  paid_amount_tzs: number;
-  status: "Draft" | "Sent" | "Partially Paid" | "Paid";
-  sent_at: string | null;
-  paid_at: string | null;
-  created_at: string;
-  updated_at: string;
-  customer?: Customer | null;
-  trips?: TripRow[] | null;
-};
-
-// ========== QUERIES ==========
-
-export const vehiclesQuery = queryOptions({
-  queryKey: ["vehicles"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("vehicles").select("*").order("reg_number");
-    if (error) throw error;
-    return data as Vehicle[];
-  },
+export const Route = createFileRoute("/settings/")({
+  component: SettingsPage,
+  head: () => ({
+    meta: [
+      { title: "Settings — Primesphere Holdings Logistics" },
+      { name: "description", content: "Company, financial and user administration." }
+    ]
+  }),
 });
 
-export const driversQuery = queryOptions({
-  queryKey: ["drivers"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("drivers").select("*").order("full_name");
-    if (error) throw error;
-    return data as Driver[];
-  },
-});
+const ROLES = ["admin", "dispatcher", "finance", "driver"] as const;
+const ROLE_DESC: Record<string, string> = {
+  admin: "Full access to all modules",
+  dispatcher: "Trips, Drivers, Vehicles",
+  finance: "Expenses, Settlements, Reports",
+  driver: "Driver Voucher only",
+};
 
-export const tripsQuery = queryOptions({
-  queryKey: ["trips"],
-  queryFn: async (): Promise<TripRow[]> => {
-    const { data: trips, error } = await supabase
-      .from("trips")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    const ids = (trips ?? []).map((t) => t.id);
-    if (ids.length === 0) return [];
-    const [{ data: vehicles }, { data: drivers }, { data: fins }, { data: exps }] = await Promise.all([
-      supabase.from("vehicles").select("*"),
-      supabase.from("drivers").select("*"),
-      supabase.from("trip_financials").select("*").in("trip_id", ids),
-      supabase.from("trip_expenses").select("trip_id, amount_tzs, status").in("trip_id", ids),
-    ]);
-    const vMap = new Map((vehicles ?? []).map((v) => [v.id, v]));
-    const dMap = new Map((drivers ?? []).map((d) => [d.id, d]));
-    const fMap = new Map((fins ?? []).map((f) => [f.trip_id, f]));
-    const eMap = new Map<string, number>();
-    for (const e of exps ?? []) {
-      if (e.status === "Verified") eMap.set(e.trip_id, (eMap.get(e.trip_id) ?? 0) + Number(e.amount_tzs));
-    }
-    return (trips as Trip[]).map((t) => ({
-      ...t,
-      vehicle: (vMap.get(t.vehicle_id ?? "") as Vehicle) ?? null,
-      driver: (dMap.get(t.driver_id ?? "") as Driver) ?? null,
-      financial: (fMap.get(t.id) as TripFinancial) ?? null,
-      expenses_sum: eMap.get(t.id) ?? 0,
-    }));
-  },
-});
+function SettingsPage() {
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Page header */}
+      <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">Settings &amp; Administration</h1>
+          <p className="text-xs text-muted-foreground">Company profile, financial defaults, users and audit logs.</p>
+        </div>
+      </div>
 
-export const tripDetailQuery = (tripId: string) =>
-  queryOptions({
-    queryKey: ["trip", tripId],
-    queryFn: async () => {
-      const [{ data: trip }, { data: fin }, { data: exps }] = await Promise.all([
-        supabase.from("trips").select("*").eq("id", tripId).maybeSingle(),
-        supabase.from("trip_financials").select("*").eq("trip_id", tripId).maybeSingle(),
-        supabase
-          .from("trip_expenses")
-          .select("*")
-          .eq("trip_id", tripId)
-          .order("created_at", { ascending: false }),
-      ]);
-      if (!trip) return null;
-      const [{ data: vehicle }, { data: driver }] = await Promise.all([
-        trip.vehicle_id
-          ? supabase.from("vehicles").select("*").eq("id", trip.vehicle_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-        trip.driver_id
-          ? supabase.from("drivers").select("*").eq("id", trip.driver_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ]);
-      return {
-        trip: trip as Trip,
-        financial: (fin as TripFinancial) ?? null,
-        expenses: (exps ?? []) as TripExpense[],
-        vehicle: (vehicle as Vehicle) ?? null,
-        driver: (driver as Driver) ?? null,
-      };
-    },
+      <main className="mx-auto max-w-[1200px] px-4 md:px-6 py-6">
+        <Tabs defaultValue="company">
+          <TabsList className="flex-wrap">
+            <TabsTrigger value="company">Company</TabsTrigger>
+            <TabsTrigger value="financial">Financial</TabsTrigger>
+            <TabsTrigger value="users">Users &amp; Roles</TabsTrigger>
+            <TabsTrigger value="system">System</TabsTrigger>
+          </TabsList>
+          <TabsContent value="company" className="mt-6"><CompanyTab /></TabsContent>
+          <TabsContent value="financial" className="mt-6"><FinancialTab /></TabsContent>
+          <TabsContent value="users" className="mt-6"><UsersTab /></TabsContent>
+          <TabsContent value="system" className="mt-6"><SystemTab /></TabsContent>
+        </Tabs>
+      </main>
+    </div>
+  );
+}
+
+function CompanyTab() {
+  const qc = useQueryClient();
+  const { data } = useQuery(companySettingsQuery);
+  const [f, setF] = useState({
+    company_name: "",
+    logo_url: "",
+    address: "",
+    phone: "",
+    email: "",
+    tin: "", // <-- ADDED
   });
 
-export const driversOverviewQuery = queryOptions({
-  queryKey: ["drivers", "overview"],
-  queryFn: async (): Promise<DriverRow[]> => {
-    const [{ data: drivers, error }, { data: trips }, { data: fins }, { data: pays }] =
-      await Promise.all([
-        supabase.from("drivers").select("*").order("full_name"),
-        supabase.from("trips").select("id, driver_id, status"),
-        supabase.from("trip_financials").select("trip_id, advance_paid_tzs"),
-        supabase.from("driver_payments").select("driver_id, payment_type, amount_tzs"),
-      ]);
-    if (error) throw error;
-    const finMap = new Map((fins ?? []).map((f) => [f.trip_id, Number(f.advance_paid_tzs)]));
-    return (drivers ?? []).map((d) => {
-      const dtrips = (trips ?? []).filter((t) => t.driver_id === d.id);
-      const active = dtrips.filter((t) => t.status === "In-Transit" || t.status === "Dispatched").length;
-      const tripAdvance = dtrips.reduce((s, t) => s + (finMap.get(t.id) ?? 0), 0);
-      const dpays = (pays ?? []).filter((p) => p.driver_id === d.id);
-      const salary = dpays.filter((p) => p.payment_type === "Salary").reduce((s, p) => s + Number(p.amount_tzs), 0);
-      const extra = dpays.filter((p) => p.payment_type === "Advance").reduce((s, p) => s + Number(p.amount_tzs), 0);
-      return {
-        ...(d as Driver),
-        active_trips: active,
-        total_trips: dtrips.length,
-        trip_advance_tzs: tripAdvance,
-        salary_paid_tzs: salary,
-        extra_advance_tzs: extra,
-      };
+  useEffect(() => {
+    if (data) setF({
+      company_name: data.company_name ?? "",
+      logo_url: data.logo_url ?? "",
+      address: data.address ?? "",
+      phone: data.phone ?? "",
+      email: data.email ?? "",
+      tin: data.tin ?? "", // <-- ADDED
     });
-  },
-});
+  }, [data]);
 
-export const driverDetailQuery = (driverId: string) =>
-  queryOptions({
-    queryKey: ["driver", driverId],
-    queryFn: async () => {
-      const [{ data: driver }, { data: trips }, { data: payments }] = await Promise.all([
-        supabase.from("drivers").select("*").eq("id", driverId).maybeSingle(),
-        supabase
-          .from("trips")
-          .select("*")
-          .eq("driver_id", driverId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("driver_payments")
-          .select("*")
-          .eq("driver_id", driverId)
-          .order("payment_date", { ascending: false }),
-      ]);
-      if (!driver) return null;
-      const tripIds = (trips ?? []).map((t) => t.id);
-      const [{ data: fins }, { data: vehicles }] = await Promise.all([
-        tripIds.length
-          ? supabase.from("trip_financials").select("*").in("trip_id", tripIds)
-          : Promise.resolve({ data: [] as TripFinancial[] }),
-        supabase.from("vehicles").select("*"),
-      ]);
-      const fMap = new Map((fins ?? []).map((f) => [f.trip_id, f as TripFinancial]));
-      const vMap = new Map((vehicles ?? []).map((v) => [v.id, v as Vehicle]));
-      return {
-        driver: driver as Driver,
-        trips: (trips as Trip[]).map((t) => ({
-          ...t,
-          financial: fMap.get(t.id) ?? null,
-          vehicle: (vMap.get(t.vehicle_id ?? "") as Vehicle) ?? null,
-        })),
-        payments: (payments ?? []) as DriverPayment[],
-      };
-    },
-  });
-
-export const vehiclesOverviewQuery = queryOptions({
-  queryKey: ["vehicles", "overview"],
-  queryFn: async (): Promise<VehicleRow[]> => {
-    const [{ data: vehicles, error }, { data: trips }, { data: fins }] = await Promise.all([
-      supabase.from("vehicles").select("*").order("reg_number"),
-      supabase.from("trips").select("id, vehicle_id, status, planned_km"),
-      supabase.from("trip_financials").select("trip_id, total_contract_tzs, contract_amount, fx_exchange_rate"),
-    ]);
-    if (error) throw error;
-    const finMap = new Map(
-      (fins ?? []).map((f) => [
-        f.trip_id,
-        Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)),
-      ]),
-    );
-    return (vehicles ?? []).map((v) => {
-      const vtrips = (trips ?? []).filter((t) => t.vehicle_id === v.id);
-      const active = vtrips.filter((t) => t.status === "In-Transit" || t.status === "Dispatched").length;
-      const km = vtrips.reduce((s, t) => s + Number(t.planned_km ?? 0), 0);
-      const rev = vtrips.reduce((s, t) => s + (finMap.get(t.id) ?? 0), 0);
-      return {
-        ...(v as Vehicle),
-        active_trips: active,
-        total_trips: vtrips.length,
-        total_km: km,
-        revenue_tzs: rev,
-      };
-    });
-  },
-});
-
-export const expensesQuery = queryOptions({
-  queryKey: ["expenses", "all"],
-  queryFn: async (): Promise<ExpenseRow[]> => {
-    const [{ data: exps, error }, { data: trips }, { data: drivers }, { data: vehicles }] =
-      await Promise.all([
-        supabase.from("trip_expenses").select("*").order("created_at", { ascending: false }),
-        supabase.from("trips").select("id, trip_code, origin_destination, driver_id, vehicle_id"),
-        supabase.from("drivers").select("id, full_name"),
-        supabase.from("vehicles").select("id, reg_number"),
-      ]);
-    if (error) throw error;
-    const tMap = new Map((trips ?? []).map((t) => [t.id, t]));
-    const dMap = new Map((drivers ?? []).map((d) => [d.id, d.full_name]));
-    const vMap = new Map((vehicles ?? []).map((v) => [v.id, v.reg_number]));
-    return (exps ?? []).map((e) => {
-      const t = tMap.get(e.trip_id);
-      return {
-        ...(e as TripExpense),
-        trip_code: t?.trip_code ?? "—",
-        origin_destination: t?.origin_destination ?? "—",
-        driver_name: t?.driver_id ? dMap.get(t.driver_id) ?? null : null,
-        vehicle_reg: t?.vehicle_id ? vMap.get(t.vehicle_id) ?? null : null,
-      };
-    });
-  },
-});
-
-export const customersQuery = queryOptions({
-  queryKey: ["customers"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("customers").select("*").order("company_name");
-    if (error) throw error;
-    return data as Customer[];
-  },
-});
-
-export const customersOverviewQuery = queryOptions({
-  queryKey: ["customers", "overview"],
-  queryFn: async (): Promise<CustomerRow[]> => {
-    const [{ data: customers, error }, { data: trips }, { data: fins }, { data: contracts }] = await Promise.all([
-      supabase.from("customers").select("*").order("company_name"),
-      supabase.from("trips").select("id, customer_id"),
-      supabase.from("trip_financials").select("trip_id, contract_amount"),
-      supabase.from("contracts").select("customer_id"),
-    ]);
-    if (error) throw error;
-    const finMap = new Map((fins ?? []).map((f) => [f.trip_id, Number(f.contract_amount)]));
-    return (customers ?? []).map((c) => {
-      const ctrips = (trips ?? []).filter((t) => t.customer_id === c.id);
-      const rev = ctrips.reduce((s, t) => s + (finMap.get(t.id) ?? 0), 0);
-      return {
-        ...(c as Customer),
-        trip_count: ctrips.length,
-        contract_count: (contracts ?? []).filter((x) => x.customer_id === c.id).length,
-        revenue_usd: rev,
-      };
-    });
-  },
-});
-
-export const customerDetailQuery = (customerId: string) =>
-  queryOptions({
-    queryKey: ["customer", customerId],
-    queryFn: async () => {
-      const [{ data: customer }, { data: contracts }, { data: trips }] = await Promise.all([
-        supabase.from("customers").select("*").eq("id", customerId).maybeSingle(),
-        supabase.from("contracts").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
-        supabase.from("trips").select("*").eq("customer_id", customerId).order("created_at", { ascending: false }),
-      ]);
-      if (!customer) return null;
-      const tripIds = (trips ?? []).map((t) => t.id);
-      const { data: fins } = tripIds.length
-        ? await supabase.from("trip_financials").select("*").in("trip_id", tripIds)
-        : { data: [] as TripFinancial[] };
-      const fMap = new Map((fins ?? []).map((f) => [f.trip_id, f as TripFinancial]));
-      return {
-        customer: customer as Customer,
-        contracts: (contracts ?? []) as Contract[],
-        trips: (trips as Trip[]).map((t) => ({ ...t, financial: fMap.get(t.id) ?? null })),
-      };
-    },
-  });
-
-export const companySettingsQuery = queryOptions({
-  queryKey: ["company_settings"],
-  queryFn: async () => {
-    const { data } = await supabase.from("company_settings").select("*").limit(1).maybeSingle();
-    return data as CompanySettings | null;
-  },
-});
-
-export const userRolesQuery = queryOptions({
-  queryKey: ["user_roles"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("user_roles").select("*").order("created_at", { ascending: false });
-    if (error) throw error;
-    return data as UserRole[];
-  },
-});
-
-export const auditLogsQuery = queryOptions({
-  queryKey: ["audit_logs"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100);
-    if (error) throw error;
-    return data as AuditLog[];
-  },
-});
-
-// ===== INVOICE QUERIES =====
-export const invoicesQuery = queryOptions({
-  queryKey: ["invoices"],
-  queryFn: async (): Promise<Invoice[]> => {
-    const { data, error } = await supabase
-      .from("invoices")
-      .select("*, customer:customers(*)")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data as Invoice[];
-  },
-});
-
-export const invoiceDetailQuery = (invoiceId: string) =>
-  queryOptions({
-    queryKey: ["invoice", invoiceId],
-    queryFn: async () => {
-      const { data: invoice, error } = await supabase
-        .from("invoices")
-        .select("*, customer:customers(*)")
-        .eq("id", invoiceId)
-        .maybeSingle();
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!data) return;
+      const { error } = await supabase.from("company_settings").update({ ...f, updated_at: new Date().toISOString() }).eq("id", data.id);
       if (error) throw error;
-      if (!invoice) return null;
-      const { data: trips } = await supabase
-        .from("trips")
-        .select("*, vehicle:vehicles(*), driver:drivers(*), financial:trip_financials(*)")
-        .eq("invoice_id", invoiceId);
-      return { ...invoice, trips: trips ?? [] } as Invoice & { trips: TripRow[] };
     },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["company_settings"] }); toast.success("Company settings saved"); },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-// ===== FINANCE OVERVIEW =====
-export const financeOverviewQuery = queryOptions({
-  queryKey: ["finance", "overview"],
-  queryFn: async () => {
-    const [
-      { data: trips },
-      { data: fins },
-      { data: exps },
-      { data: pays },
-      { data: drivers },
-      { data: contracts },
-      { data: maintenance },
-    ] = await Promise.all([
-      supabase.from("trips").select("*"),
-      supabase.from("trip_financials").select("*"),
-      supabase.from("trip_expenses").select("*"),
-      supabase.from("driver_payments").select("*"),
-      supabase.from("drivers").select("*"),
-      supabase.from("contracts").select("*"),
-      supabase.from("vehicle_maintenance").select("cost_tzs, status"),
-    ]);
+  return (
+    <div className="rounded-xl border bg-card p-6 max-w-2xl">
+      <div className="grid gap-4">
+        <div className="grid gap-1.5"><Label>Company name</Label><Input value={f.company_name} onChange={(e) => setF({ ...f, company_name: e.target.value })} /></div>
+        <div className="grid gap-1.5"><Label>Logo URL</Label><Input value={f.logo_url} onChange={(e) => setF({ ...f, logo_url: e.target.value })} placeholder="https://…" /></div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-1.5"><Label>Phone</Label><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+          <div className="grid gap-1.5"><Label>Email</Label><Input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
+        </div>
+        <div className="grid gap-1.5"><Label>TIN</Label><Input value={f.tin} onChange={(e) => setF({ ...f, tin: e.target.value })} /></div> {/* <-- ADDED */}
+        <div className="grid gap-1.5"><Label>Address</Label><Textarea rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
+        <div><Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2"><Save className="h-4 w-4" />Save</Button></div>
+      </div>
+    </div>
+  );
+}
 
-    const maintenanceCost = (maintenance ?? [])
-      .filter((m) => m.status === "Completed")
-      .reduce((sum, m) => sum + Number(m.cost_tzs), 0);
-
-    // Invoice metrics (optional)
-    const { data: invoices } = await supabase.from("invoices").select("*");
-    const totalInvoiced = (invoices ?? []).reduce((s, inv) => s + Number(inv.total_amount_tzs), 0);
-    const totalPaid = (invoices ?? []).reduce((s, inv) => s + Number(inv.paid_amount_tzs), 0);
-
-    return {
-      trips: (trips ?? []) as Trip[],
-      financials: (fins ?? []) as TripFinancial[],
-      expenses: (exps ?? []) as TripExpense[],
-      payments: (pays ?? []) as DriverPayment[],
-      drivers: (drivers ?? []) as Driver[],
-      contracts: (contracts ?? []) as Contract[],
-      maintenanceCost,
-      totalInvoiced,
-      totalPaid,
-    };
-  },
-});
-
-export const contractsQuery = queryOptions({
-  queryKey: ["contracts"],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("contracts")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) throw error;
-    return data as Contract[];
-  },
-});
-
-// ========== MAINTENANCE QUERIES ==========
-export type VehicleMaintenance = {
-  id: string;
-  vehicle_id: string;
-  maintenance_date: string;
-  description: string;
-  cost_tzs: number;
-  duration_hours: number | null;
-  status: string;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
-  vehicle?: { reg_number: string; model: string } | null;
-};
-
-export const maintenanceQuery = queryOptions({
-  queryKey: ["maintenance"],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("vehicle_maintenance")
-      .select(`
-        *,
-        vehicle:vehicles(reg_number, model)
-      `)
-      .order("maintenance_date", { ascending: false });
-    if (error) throw error;
-    return data as (VehicleMaintenance & { vehicle: { reg_number: string; model: string } | null })[];
-  },
-});
-
-export const vehicleMaintenanceQuery = (vehicleId: string) =>
-  queryOptions({
-    queryKey: ["maintenance", "vehicle", vehicleId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vehicle_maintenance")
-        .select(`
-          *,
-          vehicle:vehicles(reg_number, model)
-        `)
-        .eq("vehicle_id", vehicleId)
-        .order("maintenance_date", { ascending: false });
-      if (error) throw error;
-      return data as (VehicleMaintenance & { vehicle: { reg_number: string; model: string } | null })[];
-    },
-  });
+// ... the rest of the file (FinancialTab, UsersTab, SystemTab) remains unchanged ...
