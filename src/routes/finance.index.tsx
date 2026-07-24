@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Download, DollarSign, TrendingDown, TrendingUp, Wallet, Users, FileText, Wrench, Truck, Bug } from "lucide-react";
+import { Download, DollarSign, TrendingDown, TrendingUp, Wallet, Users, FileText, Wrench, Truck } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { financeOverviewQuery } from "@/lib/queries";
+import { supabase } from "@/integrations/supabase/client";
 import { fmtTZS, fmtUSD, fmtNum } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 import { cn } from "@/lib/utils";
@@ -23,22 +23,152 @@ export const Route = createFileRoute("/finance/")({
 });
 
 function FinancePage() {
-  const { data, isLoading } = useQuery(financeOverviewQuery);
+  // Direct Supabase query
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["finance-direct"],
+    queryFn: async () => {
+      // Fetch all trips with trip_type
+      const { data: trips, error: tErr } = await supabase
+        .from("trips")
+        .select("id, trip_code, trip_type, dispatch_date, planned_km, status, driver_id, vehicle_id, customer_id");
+      if (tErr) throw tErr;
+
+      // Fetch financials
+      const { data: fins, error: fErr } = await supabase
+        .from("trip_financials")
+        .select("trip_id, contract_amount, total_contract_tzs, fx_exchange_rate, advance_paid_tzs");
+      if (fErr) throw fErr;
+
+      // Fetch expenses (only Verified)
+      const { data: exps, error: eErr } = await supabase
+        .from("trip_expenses")
+        .select("trip_id, amount_tzs, status, category, volume_liters, created_at, description")
+        .eq("status", "Verified");
+      if (eErr) throw eErr;
+
+      // Fetch driver payments for salary
+      const { data: pays, error: pErr } = await supabase
+        .from("driver_payments")
+        .select("driver_id, amount_tzs, payment_type, payment_date");
+      if (pErr) throw pErr;
+
+      // Fetch drivers for salary breakdown
+      const { data: drivers, error: dErr } = await supabase
+        .from("drivers")
+        .select("id, full_name, driver_type, monthly_salary_tzs");
+      if (dErr) throw dErr;
+
+      // Fetch maintenance
+      const { data: maintenance, error: mErr } = await supabase
+        .from("vehicle_maintenance")
+        .select("cost_tzs, status, trip_type")
+        .eq("status", "Completed");
+      if (mErr) throw mErr;
+
+      // Separate border/local trips
+      const borderTrips = trips.filter(t => t.trip_type === 'border');
+      const localTrips = trips.filter(t => t.trip_type === 'local');
+
+      const borderIds = new Set(borderTrips.map(t => t.id));
+      const localIds = new Set(localTrips.map(t => t.id));
+
+      const borderFins = fins.filter(f => borderIds.has(f.trip_id));
+      const localFins = fins.filter(f => localIds.has(f.trip_id));
+
+      const borderExps = exps.filter(e => borderIds.has(e.trip_id));
+      const localExps = exps.filter(e => localIds.has(e.trip_id));
+
+      // Border metrics
+      const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
+      const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
+      const borderExpensesTzs = borderExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
+      const borderProfitTzs = borderRevenueTzs - borderExpensesTzs;
+      const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - borderExpensesTzs;
+
+      // Local metrics
+      const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
+      const localExpensesTzs = localExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
+      const localProfitTzs = localRevenueTzs - localExpensesTzs;
+      const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - localExpensesTzs;
+
+      // Salary split by driver_type
+      const driverTypeMap = new Map(drivers.map(d => [d.id, d.driver_type || 'both']));
+      const borderDrivers = drivers.filter(d => driverTypeMap.get(d.id) === 'border' || driverTypeMap.get(d.id) === 'both');
+      const localDrivers = drivers.filter(d => driverTypeMap.get(d.id) === 'local' || driverTypeMap.get(d.id) === 'both');
+
+      const borderSalary = pays
+        .filter(p => p.payment_type === 'Salary' && borderDrivers.some(d => d.id === p.driver_id))
+        .reduce((s, p) => s + Number(p.amount_tzs), 0);
+      const localSalary = pays
+        .filter(p => p.payment_type === 'Salary' && localDrivers.some(d => d.id === p.driver_id))
+        .reduce((s, p) => s + Number(p.amount_tzs), 0);
+
+      // Maintenance split
+      const borderMaintenance = maintenance
+        .filter(m => m.trip_type === 'border' || m.trip_type === 'both')
+        .reduce((s, m) => s + Number(m.cost_tzs), 0);
+      const localMaintenance = maintenance
+        .filter(m => m.trip_type === 'local' || m.trip_type === 'both')
+        .reduce((s, m) => s + Number(m.cost_tzs), 0);
+
+      // Net profits
+      const borderNetProfit = borderProfitTzs - borderSalary - borderMaintenance;
+      const localNetProfit = localProfitTzs - localSalary - localMaintenance;
+
+      // Shared
+      const totalSalary = borderSalary + localSalary;
+      const totalMaintenance = borderMaintenance + localMaintenance;
+
+      // Active contracts (simple count)
+      const { count: activeContracts } = await supabase
+        .from('contracts')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'Active');
+
+      return {
+        border: {
+          trips: borderTrips,
+          fins: borderFins,
+          exps: borderExps,
+          revenueUsd: borderRevenueUsd,
+          revenueTzs: borderRevenueTzs,
+          expensesTzs: borderExpensesTzs,
+          profitTzs: borderProfitTzs,
+          outstandingAdv: borderOutstandingAdv,
+          salary: borderSalary,
+          maintenance: borderMaintenance,
+          netProfit: borderNetProfit,
+        },
+        local: {
+          trips: localTrips,
+          fins: localFins,
+          exps: localExps,
+          revenueTzs: localRevenueTzs,
+          expensesTzs: localExpensesTzs,
+          profitTzs: localProfitTzs,
+          outstandingAdv: localOutstandingAdv,
+          salary: localSalary,
+          maintenance: localMaintenance,
+          netProfit: localNetProfit,
+        },
+        totalSalary,
+        totalMaintenance,
+        activeContracts: activeContracts || 0,
+        allTrips: trips,
+        allFins: fins,
+        allExps: exps,
+        drivers,
+        pays,
+      };
+    },
+  });
+
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [showDebug, setShowDebug] = useState(false);
 
+  // Filter trips by date if needed (we'll apply to the view)
   const view = useMemo(() => {
     if (!data) return null;
-    if (!data.border || !data.local) return null;
-    if (!Array.isArray(data.border.trips) || !Array.isArray(data.local.trips)) return null;
-
-    const borderTrips = data.border.trips ?? [];
-    const localTrips = data.local.trips ?? [];
-    const financials = data.financials ?? [];
-    const expenses = data.expenses ?? [];
-    const payments = data.payments ?? [];
-    const contracts = data.contracts ?? [];
 
     const inRange = (d: string | null) => {
       if (!d) return true;
@@ -47,51 +177,38 @@ function FinancePage() {
       return true;
     };
 
-    const filteredBorderTrips = borderTrips.filter((t) => inRange(t.dispatch_date));
-    const filteredLocalTrips = localTrips.filter((t) => inRange(t.dispatch_date));
+    const filterTrips = (trips: any[]) => trips.filter(t => inRange(t.dispatch_date));
 
-    const borderTripIds = new Set(filteredBorderTrips.map((t) => t.id));
-    const localTripIds = new Set(filteredLocalTrips.map((t) => t.id));
+    const borderTripsF = filterTrips(data.border.trips);
+    const localTripsF = filterTrips(data.local.trips);
 
-    const borderFins = financials.filter((f) => borderTripIds.has(f.trip_id));
-    const localFins = financials.filter((f) => localTripIds.has(f.trip_id));
+    const borderIds = new Set(borderTripsF.map(t => t.id));
+    const localIds = new Set(localTripsF.map(t => t.id));
 
-    const borderExps = expenses.filter((e) => borderTripIds.has(e.trip_id));
-    const localExps = expenses.filter((e) => localTripIds.has(e.trip_id));
+    const borderFins = data.allFins.filter(f => borderIds.has(f.trip_id));
+    const localFins = data.allFins.filter(f => localIds.has(f.trip_id));
 
-    const pays = payments.filter((p) => inRange(p.payment_date));
+    const borderExps = data.allExps.filter(e => borderIds.has(e.trip_id));
+    const localExps = data.allExps.filter(e => localIds.has(e.trip_id));
 
-    // Border metrics
+    // Recalculate numbers
     const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
-    const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
-    const borderExpensesTzs = borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
+    const borderExpensesTzs = borderExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
     const borderProfitTzs = borderRevenueTzs - borderExpensesTzs;
-    const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
-      borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - borderExpensesTzs;
 
-    const borderSalary = data.border.salary ?? 0;
-    const borderMaintenance = data.border.maintenance ?? 0;
-    const borderNetProfit = borderProfitTzs - borderSalary - borderMaintenance;
-
-    // Local metrics
-    const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
-    const localExpensesTzs = localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
+    const localExpensesTzs = localExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
     const localProfitTzs = localRevenueTzs - localExpensesTzs;
-    const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
-      localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - localExpensesTzs;
 
-    const localSalary = data.local.salary ?? 0;
-    const localMaintenance = data.local.maintenance ?? 0;
-    const localNetProfit = localProfitTzs - localSalary - localMaintenance;
-
-    // Shared
-    const salary = pays.filter((p) => p.payment_type === "Salary").reduce((s, p) => s + Number(p.amount_tzs), 0);
-    const activeContracts = contracts.filter((c) => c.status === "Active").length;
-    const totalMaintenance = borderMaintenance + localMaintenance;
+    // Salary and maintenance are not date-filtered; they remain global for simplicity
+    // (we'll use the precomputed from data for now)
 
     return {
       border: {
-        trips: filteredBorderTrips,
+        trips: borderTripsF,
         fins: borderFins,
         exps: borderExps,
         revenueUsd: borderRevenueUsd,
@@ -99,113 +216,89 @@ function FinancePage() {
         expensesTzs: borderExpensesTzs,
         profitTzs: borderProfitTzs,
         outstandingAdv: borderOutstandingAdv,
-        salary: borderSalary,
-        maintenance: borderMaintenance,
-        netProfit: borderNetProfit,
+        salary: data.border.salary,
+        maintenance: data.border.maintenance,
+        netProfit: borderProfitTzs - data.border.salary - data.border.maintenance,
       },
       local: {
-        trips: filteredLocalTrips,
+        trips: localTripsF,
         fins: localFins,
         exps: localExps,
         revenueTzs: localRevenueTzs,
         expensesTzs: localExpensesTzs,
         profitTzs: localProfitTzs,
         outstandingAdv: localOutstandingAdv,
-        salary: localSalary,
-        maintenance: localMaintenance,
-        netProfit: localNetProfit,
+        salary: data.local.salary,
+        maintenance: data.local.maintenance,
+        netProfit: localProfitTzs - data.local.salary - data.local.maintenance,
       },
-      pays,
-      salary,
-      activeContracts,
-      totalMaintenance,
     };
   }, [data, from, to]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="flex items-center justify-center h-[60vh] text-muted-foreground">Loading finance data…</div>
-      </div>
-    );
-  }
-
-  if (!data || !view) {
-    return (
-      <div className="min-h-screen bg-background">
-        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-          <p className="text-muted-foreground">No finance data available.</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading) return <div className="min-h-screen bg-background p-6">Loading finance data…</div>;
+  if (error) return <div className="min-h-screen bg-background p-6 text-destructive">Error: {error.message}</div>;
+  if (!data || !view) return <div className="min-h-screen bg-background p-6">No finance data available.</div>;
 
   const driverMap = new Map((data.drivers ?? []).map((d) => [d.id, d.full_name]));
 
-  // Border profitability
-  const borderProfitability = view.border.trips.map((t) => {
-    const f = view.border.fins.find((x) => x.trip_id === t.id);
-    const rev = Number(f?.total_contract_tzs ?? 0);
-    const exp = view.border.exps.filter((e) => e.trip_id === t.id && e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
-    return {
-      trip_code: t.trip_code,
-      route: t.origin_destination,
-      status: t.status,
-      revenue_tzs: rev,
-      expenses_tzs: exp,
-      profit_tzs: rev - exp,
-      margin_pct: rev ? Number(((rev - exp) / rev * 100).toFixed(1)) : 0,
-    };
-  });
-
-  // Local profitability
-  const localProfitability = view.local.trips.map((t) => {
-    const f = view.local.fins.find((x) => x.trip_id === t.id);
-    const rev = Number(f?.total_contract_tzs ?? 0);
-    const exp = view.local.exps.filter((e) => e.trip_id === t.id && e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
-    return {
-      trip_code: t.trip_code,
-      route: t.origin_destination,
-      status: t.status,
-      revenue_tzs: rev,
-      expenses_tzs: exp,
-      profit_tzs: rev - exp,
-      margin_pct: rev ? Number(((rev - exp) / rev * 100).toFixed(1)) : 0,
-    };
-  });
-
+  // Reports
   const allTrips = [...view.border.trips, ...view.local.trips];
   const allFins = [...view.border.fins, ...view.local.fins];
   const allExps = [...view.border.exps, ...view.local.exps];
 
-  // Driver advance report
+  const borderProfitability = view.border.trips.map((t) => {
+    const f = view.border.fins.find((x) => x.trip_id === t.id);
+    const rev = Number(f?.total_contract_tzs ?? 0);
+    const exp = view.border.exps.filter((e) => e.trip_id === t.id).reduce((s, e) => s + Number(e.amount_tzs), 0);
+    return {
+      trip_code: t.trip_code,
+      route: t.origin_destination,
+      status: t.status,
+      revenue_tzs: rev,
+      expenses_tzs: exp,
+      profit_tzs: rev - exp,
+      margin_pct: rev ? Number(((rev - exp) / rev * 100).toFixed(1)) : 0,
+    };
+  });
+
+  const localProfitability = view.local.trips.map((t) => {
+    const f = view.local.fins.find((x) => x.trip_id === t.id);
+    const rev = Number(f?.total_contract_tzs ?? 0);
+    const exp = view.local.exps.filter((e) => e.trip_id === t.id).reduce((s, e) => s + Number(e.amount_tzs), 0);
+    return {
+      trip_code: t.trip_code,
+      route: t.origin_destination,
+      status: t.status,
+      revenue_tzs: rev,
+      expenses_tzs: exp,
+      profit_tzs: rev - exp,
+      margin_pct: rev ? Number(((rev - exp) / rev * 100).toFixed(1)) : 0,
+    };
+  });
+
   const advanceRep = (data.drivers ?? []).map((d) => {
     const dtrips = allTrips.filter((t) => t.driver_id === d.id);
     const adv = dtrips.reduce((s, t) => s + Number(allFins.find((f) => f.trip_id === t.id)?.advance_paid_tzs ?? 0), 0);
-    const spent = allExps.filter((e) => e.status === "Verified" && dtrips.some((t) => t.id === e.trip_id)).reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const spent = allExps.filter((e) => dtrips.some((t) => t.id === e.trip_id)).reduce((s, e) => s + Number(e.amount_tzs), 0);
     return { driver: d.full_name, trips: dtrips.length, advance_tzs: adv, spent_tzs: spent, outstanding_tzs: adv - spent };
   });
 
-  // Salary report
   const salaryRep = (data.drivers ?? []).map((d) => {
-    const paid = (view.pays || [])
+    const paid = (data.pays ?? [])
       .filter((p) => p.driver_id === d.id && p.payment_type === "Salary")
       .reduce((s, p) => s + Number(p.amount_tzs), 0);
     return { driver: d.full_name, base_salary_tzs: d.monthly_salary_tzs, paid_tzs: paid };
   });
 
-  // Fuel consumption
   const fuelRep = allExps.filter((e) => e.category === "Fuel").map((e) => ({
     trip_code: allTrips.find((t) => t.id === e.trip_id)?.trip_code ?? "—",
     driver: driverMap.get(allTrips.find((t) => t.id === e.trip_id)?.driver_id ?? "") ?? "—",
     liters: Number(e.volume_liters ?? 0),
     amount_tzs: Number(e.amount_tzs),
     status: e.status,
-    date: e.created_at.slice(0, 10),
+    date: e.created_at?.slice(0, 10) || "",
   }));
 
-  // Revenue report
   const revenueRep = allTrips.map((t) => {
     const f = allFins.find((x) => x.trip_id === t.id);
     return {
@@ -218,13 +311,12 @@ function FinancePage() {
     };
   });
 
-  // Expense report
   const expenseRep = allExps.map((e) => ({
     trip_code: allTrips.find((t) => t.id === e.trip_id)?.trip_code ?? "—",
     category: e.category,
     amount_tzs: Number(e.amount_tzs),
     status: e.status,
-    date: e.created_at.slice(0, 10),
+    date: e.created_at?.slice(0, 10) || "",
   }));
 
   return (
@@ -234,9 +326,6 @@ function FinancePage() {
           <h1 className="text-xl font-bold tracking-tight">Finance &amp; Reports</h1>
           <p className="text-xs text-muted-foreground">Border (USD/TZS) and Local (TZS) operations.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="gap-2">
-          <Bug className="h-4 w-4" /> {showDebug ? "Hide" : "Show"} Debug
-        </Button>
       </div>
 
       <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
@@ -284,9 +373,9 @@ function FinancePage() {
 
         {/* Shared KPIs */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-          <KPI icon={<Users className="h-4 w-4" />} label="Total Salary" value={fmtTZS(view.salary)} sub="All drivers" tone="accent" />
-          <KPI icon={<FileText className="h-4 w-4" />} label="Active contracts" value={String(view.activeContracts)} sub="Signed & running" tone="primary" />
-          <KPI icon={<Wrench className="h-4 w-4" />} label="Total maintenance" value={fmtTZS(view.totalMaintenance)} sub="All completed jobs" tone="accent" />
+          <KPI icon={<Users className="h-4 w-4" />} label="Total Salary" value={fmtTZS(data.totalSalary)} sub="All drivers" tone="accent" />
+          <KPI icon={<FileText className="h-4 w-4" />} label="Active contracts" value={String(data.activeContracts)} sub="Signed & running" tone="primary" />
+          <KPI icon={<Wrench className="h-4 w-4" />} label="Total maintenance" value={fmtTZS(data.totalMaintenance)} sub="All completed jobs" tone="accent" />
         </div>
 
         <Tabs defaultValue="border">
@@ -307,29 +396,6 @@ function FinancePage() {
           <TabsContent value="revenue"><ReportTable name="revenue" rows={revenueRep} /></TabsContent>
           <TabsContent value="expense"><ReportTable name="expense" rows={expenseRep} /></TabsContent>
         </Tabs>
-
-        {/* Debug panel */}
-        {showDebug && (
-          <div className="mt-8 rounded-xl border bg-card p-4 overflow-auto max-h-96">
-            <h3 className="text-sm font-semibold mb-2">Debug Data</h3>
-            <pre className="text-xs whitespace-pre-wrap">
-              {JSON.stringify({
-                borderTrips: view.border.trips.length,
-                borderRevenueTzs: view.border.revenueTzs,
-                borderRevenueUsd: view.border.revenueUsd,
-                borderExpenses: view.border.expensesTzs,
-                borderProfit: view.border.profitTzs,
-                localTrips: view.local.trips.length,
-                localRevenueTzs: view.local.revenueTzs,
-                localExpenses: view.local.expensesTzs,
-                localProfit: view.local.profitTzs,
-                salaries: view.salary,
-                maintenance: view.totalMaintenance,
-                rawData: data,
-              }, null, 2)}
-            </pre>
-          </div>
-        )}
       </main>
     </div>
   );
