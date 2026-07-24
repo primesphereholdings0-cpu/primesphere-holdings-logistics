@@ -38,6 +38,7 @@ export function NewMaintenanceDialog({ initialData, trigger, onSuccess }: NewMai
   const [cost, setCost] = useState("");
   const [duration, setDuration] = useState("");
   const [status, setStatus] = useState("Planned");
+  const [tripType, setTripType] = useState<"border" | "local" | "both">("both");
 
   useEffect(() => {
     if (initialData) {
@@ -47,6 +48,7 @@ export function NewMaintenanceDialog({ initialData, trigger, onSuccess }: NewMai
       setCost(String(initialData.cost_tzs));
       setDuration(initialData.duration_hours ? String(initialData.duration_hours) : "");
       setStatus(initialData.status);
+      setTripType((initialData.trip_type as "border" | "local" | "both") || "both");
       setOpen(true);
     }
   }, [initialData]);
@@ -59,6 +61,7 @@ export function NewMaintenanceDialog({ initialData, trigger, onSuccess }: NewMai
       setCost("");
       setDuration("");
       setStatus("Planned");
+      setTripType("both");
     }
   };
 
@@ -72,6 +75,7 @@ export function NewMaintenanceDialog({ initialData, trigger, onSuccess }: NewMai
         duration_hours: duration ? Number(duration) : null,
         status,
         completed_at: status === "Completed" ? new Date().toISOString() : null,
+        trip_type: tripType,
       };
       if (initialData?.id) {
         const { error } = await supabase
@@ -89,6 +93,7 @@ export function NewMaintenanceDialog({ initialData, trigger, onSuccess }: NewMai
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance"] });
       qc.invalidateQueries({ queryKey: ["vehicles"] });
+      qc.invalidateQueries({ queryKey: ["finance", "overview"] });
       if (initialData?.vehicle_id) {
         qc.invalidateQueries({ queryKey: ["maintenance", "vehicle", initialData.vehicle_id] });
       }
@@ -187,6 +192,22 @@ export function NewMaintenanceDialog({ initialData, trigger, onSuccess }: NewMai
                 {STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* NEW: Trip Type field */}
+          <div className="grid gap-1.5">
+            <Label>Trip type</Label>
+            <Select value={tripType} onValueChange={(v) => setTripType(v as "border" | "local" | "both")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="border">Border</SelectItem>
+                <SelectItem value="local">Local</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Determines which operations this maintenance cost is allocated to in finance reports.
+            </p>
           </div>
         </div>
         <DialogFooter>
