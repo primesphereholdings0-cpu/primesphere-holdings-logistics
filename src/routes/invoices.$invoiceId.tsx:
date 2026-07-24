@@ -80,15 +80,10 @@ function InvoiceDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Print styles */}
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          .invoice-container, .invoice-container * {
-            visibility: visible;
-          }
+          body * { visibility: hidden; }
+          .invoice-container, .invoice-container * { visibility: visible; }
           .invoice-container {
             position: absolute;
             left: 0;
@@ -102,13 +97,25 @@ function InvoiceDetailPage() {
             border-radius: 0 !important;
             overflow: visible !important;
           }
-          .print-hidden {
-            display: none !important;
-          }
+          .print-hidden { display: none !important; }
+        }
+        .invoice-container {
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        .invoice-container th,
+        .invoice-container td {
+          padding: 10px 12px;
+        }
+        .invoice-container .text-muted {
+          color: #4a5568 !important;
+        }
+        .invoice-container .text-dark {
+          color: #1a202c !important;
         }
       `}</style>
 
-      {/* Page header – hidden when printing */}
+      {/* Header – hidden when printing */}
       <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between gap-3 flex-wrap print-hidden">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/invoices" })} className="h-8 w-8">
@@ -138,7 +145,6 @@ function InvoiceDetailPage() {
       </div>
 
       <main className="mx-auto max-w-4xl px-4 md:px-6 py-6 print:px-0 print:py-0">
-        {/* Invoice content */}
         <div className="invoice-container relative overflow-hidden rounded-xl border bg-white shadow-sm print:shadow-none print:border-0 print:rounded-none">
           {/* Top banner */}
           <div
@@ -147,12 +153,12 @@ function InvoiceDetailPage() {
           >
             <div className="relative z-10 flex items-start justify-between">
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-white">INVOICE</h1>
-                <p className="mt-1 text-sm text-white/70">Primesphere Holdings Logistics</p>
+                <h1 className="text-4xl font-bold tracking-tight text-white">INVOICE</h1>
+                <p className="mt-1 text-sm text-white/80">Primesphere Holdings Logistics</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-semibold" style={{ color: GOLD }}>{invoice_number}</p>
-                <p className="text-xs text-white/70">Date: {new Date().toLocaleDateString()}</p>
+                <p className="text-sm font-bold" style={{ color: GOLD }}>{invoice_number}</p>
+                <p className="text-sm text-white/80">Date: {new Date().toLocaleDateString()}</p>
               </div>
             </div>
             <svg
@@ -165,18 +171,18 @@ function InvoiceDetailPage() {
             </svg>
           </div>
 
-          <div className="px-8 pb-8">
-            {/* Bill to / Period */}
-            <div className="mt-2 grid grid-cols-2 gap-4">
-              <div className="rounded-md border px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY }}>Bill to</p>
-                <p className="mt-1 font-semibold" style={{ color: NAVY }}>{customer?.company_name || "—"}</p>
-                {customer?.address && <p className="text-sm text-muted-foreground">{customer.address}</p>}
-                {customer?.phone && <p className="text-sm text-muted-foreground">{customer.phone}</p>}
+          <div className="px-8 pb-6">
+            {/* Bill to & Period */}
+            <div className="mt-2 grid grid-cols-2 gap-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bill to</p>
+                <p className="mt-1 text-base font-semibold text-gray-800">{customer?.company_name || "—"}</p>
+                {customer?.address && <p className="text-sm text-gray-700">{customer.address}</p>}
+                {customer?.phone && <p className="text-sm text-gray-700">{customer.phone}</p>}
               </div>
-              <div className="rounded-md border px-4 py-3 text-right">
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY }}>Period</p>
-                <p className="mt-1 font-medium">
+              <div className="text-right">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Period</p>
+                <p className="mt-1 text-base font-medium text-gray-800">
                   {new Date(period_start).toLocaleDateString()} – {new Date(period_end).toLocaleDateString()}
                 </p>
               </div>
@@ -187,19 +193,19 @@ function InvoiceDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ backgroundColor: NAVY }}>
-                    <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Trip</th>
-                    <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Route</th>
-                    <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-white">Vehicle</th>
-                    <th className="py-2.5 px-3 text-right text-xs font-semibold uppercase tracking-wider text-white">Amount</th>
+                    <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-wider text-white">Trip</th>
+                    <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-wider text-white">Route</th>
+                    <th className="py-3 px-4 text-left text-xs font-semibold uppercase tracking-wider text-white">Vehicle</th>
+                    <th className="py-3 px-4 text-right text-xs font-semibold uppercase tracking-wider text-white">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {trips?.map((t) => (
                     <tr key={t.id} className="border-b last:border-b-0">
-                      <td className="py-2 px-3 font-mono text-xs">{t.trip_code}</td>
-                      <td className="py-2 px-3">{t.origin_destination}</td>
-                      <td className="py-2 px-3">{t.vehicle?.reg_number || "—"}</td>
-                      <td className="py-2 px-3 text-right">{fmtTZS(t.financial?.contract_amount)}</td>
+                      <td className="py-2.5 px-4 font-mono text-xs text-gray-800">{t.trip_code}</td>
+                      <td className="py-2.5 px-4 text-gray-800">{t.origin_destination}</td>
+                      <td className="py-2.5 px-4 text-gray-800">{t.vehicle?.reg_number || "—"}</td>
+                      <td className="py-2.5 px-4 text-right font-medium text-gray-800">{fmtTZS(t.financial?.contract_amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -208,15 +214,15 @@ function InvoiceDetailPage() {
 
             {/* Totals */}
             <div className="mt-6 flex justify-end">
-              <div className="w-full max-w-xs">
+              <div className="w-72">
                 <div className="rounded-md border">
-                  <div className="flex justify-between px-4 py-2 text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>{fmtTZS(subtotal_tzs)}</span>
+                  <div className="flex justify-between px-4 py-2.5 text-sm">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium text-gray-800">{fmtTZS(subtotal_tzs)}</span>
                   </div>
-                  <div className="flex justify-between border-t px-4 py-2 text-sm">
-                    <span className="text-muted-foreground">VAT (18%)</span>
-                    <span>{fmtTZS(vat_amount_tzs)}</span>
+                  <div className="flex justify-between border-t px-4 py-2.5 text-sm">
+                    <span className="text-gray-600">VAT (18%)</span>
+                    <span className="font-medium text-gray-800">{fmtTZS(vat_amount_tzs)}</span>
                   </div>
                 </div>
                 <div
@@ -224,34 +230,28 @@ function InvoiceDetailPage() {
                   style={{ backgroundColor: NAVY }}
                 >
                   <span className="text-sm font-bold uppercase tracking-wider text-white">Total</span>
-                  <span className="text-lg font-bold text-white">{fmtTZS(total_amount_tzs)}</span>
+                  <span className="text-xl font-bold text-white">{fmtTZS(total_amount_tzs)}</span>
                 </div>
               </div>
             </div>
 
             {/* Payment status */}
-            <div className="mt-6 flex items-center justify-between rounded-md border-l-4 bg-muted/30 px-4 py-3" style={{ borderColor: GOLD }}>
+            <div className="mt-6 flex items-center justify-between rounded-md border-l-4 bg-gray-50 px-4 py-3" style={{ borderColor: GOLD }}>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment status</p>
-                <p className="font-semibold" style={{ color: paid_amount_tzs >= total_amount_tzs ? "#10b981" : GOLD }}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Payment status</p>
+                <p className="text-base font-bold" style={{ color: paid_amount_tzs >= total_amount_tzs ? "#10b981" : GOLD }}>
                   {status}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount paid</p>
-                <p className="font-semibold">{fmtTZS(paid_amount_tzs)}</p>
-                <p className="text-xs text-muted-foreground">Balance: {fmtTZS(balance)}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Amount paid</p>
+                <p className="text-base font-bold text-gray-800">{fmtTZS(paid_amount_tzs)}</p>
+                <p className="text-sm text-gray-600">Balance: {fmtTZS(balance)}</p>
               </div>
-            </div>
-
-            {/* Terms */}
-            <div className="mt-6 border-t pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: NAVY }}>Terms and conditions</p>
-              <p className="mt-1 text-xs text-muted-foreground">Payment is due within 30 days from the invoice date.</p>
             </div>
           </div>
 
-          {/* Bottom footer */}
+          {/* Bottom footer with terms */}
           <div
             className="relative mt-2 pt-9 pb-5"
             style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #023296 55%, ${NAVY} 100%)` }}
@@ -264,9 +264,10 @@ function InvoiceDetailPage() {
             >
               <path d="M0,30 C150,0 450,60 600,30 L600,0 L0,0 Z" fill="white" />
             </svg>
-            <p className="relative z-10 text-center text-xs text-white/80">
-              Primesphere Holdings Logistics · Thank you for your business
-            </p>
+            <div className="relative z-10 text-center">
+              <p className="text-xs text-white/80">Primesphere Holdings Logistics · Thank you for your business</p>
+              <p className="mt-1 text-xs text-white/60">Payment is due within 30 days from the invoice date.</p>
+            </div>
           </div>
         </div>
       </main>
