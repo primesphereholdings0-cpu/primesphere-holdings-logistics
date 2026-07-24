@@ -19,6 +19,7 @@ export type Driver = {
   monthly_salary_tzs: number;
   base_location: string | null;
   created_at?: string;
+  driver_type: string; // 'border' | 'local' | 'both'
 };
 
 export type DriverPayment = {
@@ -195,6 +196,21 @@ export type Invoice = {
   updated_at: string;
   customer?: Customer | null;
   trips?: TripRow[] | null;
+};
+
+export type VehicleMaintenance = {
+  id: string;
+  vehicle_id: string;
+  maintenance_date: string;
+  description: string;
+  cost_tzs: number;
+  duration_hours: number | null;
+  status: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  trip_type: string; // 'border' | 'local' | 'both'
+  vehicle?: { reg_number: string; model: string } | null;
 };
 
 // ========== QUERIES ==========
@@ -524,7 +540,7 @@ export const invoiceDetailQuery = (invoiceId: string) =>
     },
   });
 
-// ===== FINANCE OVERVIEW =====
+// ===== UPDATED FINANCE OVERVIEW =====
 export const financeOverviewQuery = queryOptions({
   queryKey: ["finance", "overview"],
   queryFn: async () => {
@@ -543,27 +559,93 @@ export const financeOverviewQuery = queryOptions({
       supabase.from("driver_payments").select("*"),
       supabase.from("drivers").select("*"),
       supabase.from("contracts").select("*"),
-      supabase.from("vehicle_maintenance").select("cost_tzs, status"),
+      supabase.from("vehicle_maintenance").select("*"), // now includes trip_type
     ]);
 
-    const maintenanceCost = (maintenance ?? [])
-      .filter((m) => m.status === "Completed")
-      .reduce((sum, m) => sum + Number(m.cost_tzs), 0);
+    // Separate border and local trips
+    const borderTrips = (trips ?? []).filter((t) => t.trip_type !== "local");
+    const localTrips = (trips ?? []).filter((t) => t.trip_type === "local");
 
-    const { data: invoices } = await supabase.from("invoices").select("*");
-    const totalInvoiced = (invoices ?? []).reduce((s, inv) => s + Number(inv.total_amount_tzs), 0);
-    const totalPaid = (invoices ?? []).reduce((s, inv) => s + Number(inv.paid_amount_tzs), 0);
+    const borderTripIds = new Set(borderTrips.map((t) => t.id));
+    const localTripIds = new Set(localTrips.map((t) => t.id));
+
+    const borderFins = (fins ?? []).filter((f) => borderTripIds.has(f.trip_id));
+    const localFins = (fins ?? []).filter((f) => localTripIds.has(f.trip_id));
+
+    const borderExps = (exps ?? []).filter((e) => borderTripIds.has(e.trip_id));
+    const localExps = (exps ?? []).filter((e) => localTripIds.has(e.trip_id));
+
+    // Border Revenue (USD + TZS)
+    const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
+    const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
+    const borderExpensesTzs = borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const borderProfitTzs = borderRevenueTzs - borderExpensesTzs;
+    const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
+      borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+
+    // Local Revenue (TZS only)
+    const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
+    const localExpensesTzs = localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+    const localProfitTzs = localRevenueTzs - localExpensesTzs;
+    const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
+      localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
+
+    // Driver Salary – split by driver_type
+    const driverTypeMap = new Map((drivers ?? []).map((d) => [d.id, d.driver_type || "both"]));
+    const borderDrivers = (drivers ?? []).filter((d) => driverTypeMap.get(d.id) === "border" || driverTypeMap.get(d.id) === "both");
+    const localDrivers = (drivers ?? []).filter((d) => driverTypeMap.get(d.id) === "local" || driverTypeMap.get(d.id) === "both");
+
+    const allPayments = pays ?? [];
+    const borderSalary = allPayments
+      .filter((p) => p.payment_type === "Salary" && borderDrivers.some((d) => d.id === p.driver_id))
+      .reduce((s, p) => s + Number(p.amount_tzs), 0);
+    const localSalary = allPayments
+      .filter((p) => p.payment_type === "Salary" && localDrivers.some((d) => d.id === p.driver_id))
+      .reduce((s, p) => s + Number(p.amount_tzs), 0);
+
+    // Maintenance – split by trip_type
+    const borderMaintenance = (maintenance ?? [])
+      .filter((m) => m.status === "Completed" && (m.trip_type === "border" || m.trip_type === "both"))
+      .reduce((s, m) => s + Number(m.cost_tzs), 0);
+    const localMaintenance = (maintenance ?? [])
+      .filter((m) => m.status === "Completed" && (m.trip_type === "local" || m.trip_type === "both"))
+      .reduce((s, m) => s + Number(m.cost_tzs), 0);
+
+    // Net profits
+    const borderNetProfit = borderProfitTzs - borderSalary - borderMaintenance;
+    const localNetProfit = localProfitTzs - localSalary - localMaintenance;
+
+    const activeContracts = (contracts ?? []).filter((c) => c.status === "Active").length;
 
     return {
-      trips: (trips ?? []) as Trip[],
-      financials: (fins ?? []) as TripFinancial[],
-      expenses: (exps ?? []) as TripExpense[],
-      payments: (pays ?? []) as DriverPayment[],
-      drivers: (drivers ?? []) as Driver[],
-      contracts: (contracts ?? []) as Contract[],
-      maintenanceCost,
-      totalInvoiced,
-      totalPaid,
+      border: {
+        trips: borderTrips,
+        fins: borderFins,
+        exps: borderExps,
+        revenueUsd: borderRevenueUsd,
+        revenueTzs: borderRevenueTzs,
+        expensesTzs: borderExpensesTzs,
+        profitTzs: borderProfitTzs,
+        outstandingAdv: borderOutstandingAdv,
+        salary: borderSalary,
+        maintenance: borderMaintenance,
+        netProfit: borderNetProfit,
+      },
+      local: {
+        trips: localTrips,
+        fins: localFins,
+        exps: localExps,
+        revenueTzs: localRevenueTzs,
+        expensesTzs: localExpensesTzs,
+        profitTzs: localProfitTzs,
+        outstandingAdv: localOutstandingAdv,
+        salary: localSalary,
+        maintenance: localMaintenance,
+        netProfit: localNetProfit,
+      },
+      activeContracts,
+      totalInvoiced: 0, // can be added separately
+      totalPaid: 0,
     };
   },
 });
@@ -581,20 +663,6 @@ export const contractsQuery = queryOptions({
 });
 
 // ========== MAINTENANCE QUERIES ==========
-export type VehicleMaintenance = {
-  id: string;
-  vehicle_id: string;
-  maintenance_date: string;
-  description: string;
-  cost_tzs: number;
-  duration_hours: number | null;
-  status: string;
-  completed_at: string | null;
-  created_at: string;
-  updated_at: string;
-  vehicle?: { reg_number: string; model: string } | null;
-};
-
 export const maintenanceQuery = queryOptions({
   queryKey: ["maintenance"],
   queryFn: async () => {
