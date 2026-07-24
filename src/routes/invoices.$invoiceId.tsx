@@ -79,7 +79,6 @@ function InvoiceDetailPage() {
   const { invoice_number, customer, trips, period_start, period_end, subtotal_tzs, vat_amount_tzs, total_amount_tzs, paid_amount_tzs, status } = data;
   const balance = total_amount_tzs - paid_amount_tzs;
 
-  // Company details from settings
   const companyName = company?.company_name || "Primesphere Holdings Logistics";
   const companyAddress = company?.address || "";
   const companyPhone = company?.phone || "";
@@ -89,24 +88,77 @@ function InvoiceDetailPage() {
   return (
     <div className="min-h-screen bg-background">
       <style>{`
+        /* Print styles – preserve colors and layout */
         @media print {
-          body * { visibility: hidden; }
-          .invoice-container, .invoice-container * { visibility: visible; }
-          .invoice-container {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
+          body {
+            background: white !important;
             margin: 0;
             padding: 0;
+          }
+          .print-hidden {
+            display: none !important;
+          }
+          .invoice-container {
             background: white !important;
             box-shadow: none !important;
             border: none !important;
             border-radius: 0 !important;
             overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
           }
-          .print-hidden { display: none !important; }
+          .invoice-container * {
+            color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .invoice-container .bg-navy {
+            background: #011F7B !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .invoice-container .text-gold {
+            color: #FFBA09 !important;
+          }
+          .invoice-container .bg-white {
+            background: white !important;
+          }
+          .invoice-container table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          .invoice-container th,
+          .invoice-container td {
+            border: 1px solid #e5e7eb !important;
+            padding: 8px 12px !important;
+            text-align: left !important;
+          }
+          .invoice-container th {
+            background: #011F7B !important;
+            color: white !important;
+            font-weight: 600 !important;
+          }
+          .invoice-container td {
+            background: white !important;
+            color: #1a202c !important;
+          }
+          .invoice-container .totals-table td {
+            border: none !important;
+            background: #f9fafb !important;
+          }
+          .invoice-container .totals-table .total-row {
+            background: #011F7B !important;
+            color: white !important;
+          }
+          .invoice-container .total-row td {
+            background: #011F7B !important;
+            color: white !important;
+          }
         }
+
+        /* Screen styles */
         .invoice-container {
           font-size: 14px;
           line-height: 1.6;
@@ -154,9 +206,9 @@ function InvoiceDetailPage() {
 
       <main className="mx-auto max-w-4xl px-4 md:px-6 py-6 print:px-0 print:py-0">
         <div className="invoice-container relative overflow-hidden rounded-xl border bg-white shadow-sm print:shadow-none print:border-0 print:rounded-none">
-          {/* Top banner with company details */}
+          {/* Top banner */}
           <div
-            className="relative px-8 pt-8 pb-14"
+            className="bg-navy relative px-8 pt-8 pb-14"
             style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #023296 55%, ${NAVY} 100%)` }}
           >
             <div className="relative z-10 flex items-start justify-between">
@@ -169,7 +221,7 @@ function InvoiceDetailPage() {
                 {companyTin && <p className="text-xs text-white/70">TIN: {companyTin}</p>}
               </div>
               <div className="text-right">
-                <p className="text-sm font-bold" style={{ color: GOLD }}>{invoice_number}</p>
+                <p className="text-sm font-bold text-gold" style={{ color: GOLD }}>{invoice_number}</p>
                 <p className="text-sm text-white/80">Date: {new Date().toLocaleDateString()}</p>
               </div>
             </div>
@@ -238,7 +290,7 @@ function InvoiceDetailPage() {
                   </div>
                 </div>
                 <div
-                  className="mt-3 flex items-center justify-between rounded-md px-4 py-3"
+                  className="mt-3 flex items-center justify-between rounded-md px-4 py-3 bg-navy"
                   style={{ backgroundColor: NAVY }}
                 >
                   <span className="text-sm font-bold uppercase tracking-wider text-white">Total</span>
@@ -265,7 +317,7 @@ function InvoiceDetailPage() {
 
           {/* Bottom footer with terms */}
           <div
-            className="relative mt-2 pt-9 pb-5"
+            className="relative mt-2 pt-9 pb-5 bg-navy"
             style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #023296 55%, ${NAVY} 100%)` }}
           >
             <svg
