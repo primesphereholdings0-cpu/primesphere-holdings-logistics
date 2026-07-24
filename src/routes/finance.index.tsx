@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { companySettingsQuery } from "@/lib/queries";
 import { fmtTZS, fmtUSD, fmtNum } from "@/lib/format";
 import { downloadCsv } from "@/lib/export";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,11 @@ export const Route = createFileRoute("/finance/")({
 });
 
 function FinancePage() {
-  // Direct Supabase query
+  // Fetch company settings for exchange rate
+  const { data: settings } = useQuery(companySettingsQuery);
+  const defaultFxRate = settings?.default_fx_rate || 2600;
+
+  // Direct Supabase query for finance data
   const { data, isLoading, error } = useQuery({
     queryKey: ["finance-direct"],
     queryFn: async () => {
@@ -166,7 +171,7 @@ function FinancePage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  // Filter trips by date if needed (we'll apply to the view)
+  // Filter trips by date
   const view = useMemo(() => {
     if (!data) return null;
 
@@ -203,9 +208,6 @@ function FinancePage() {
     const localProfitTzs = localRevenueTzs - localExpensesTzs;
     const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - localExpensesTzs;
 
-    // Salary and maintenance are not date-filtered; they remain global for simplicity
-    // (we'll use the precomputed from data for now)
-
     return {
       border: {
         trips: borderTripsF,
@@ -238,6 +240,9 @@ function FinancePage() {
   if (isLoading) return <div className="min-h-screen bg-background p-6">Loading finance data…</div>;
   if (error) return <div className="min-h-screen bg-background p-6 text-destructive">Error: {error.message}</div>;
   if (!data || !view) return <div className="min-h-screen bg-background p-6">No finance data available.</div>;
+
+  // Helper to format USD equivalent using defaultFxRate
+  const asUsd = (tzs: number) => `≈ ${fmtUSD(tzs / defaultFxRate)}`;
 
   const driverMap = new Map((data.drivers ?? []).map((d) => [d.id, d.full_name]));
 
@@ -335,7 +340,7 @@ function FinancePage() {
           <Button variant="ghost" size="sm" onClick={() => { setFrom(""); setTo(""); }}>Reset</Button>
         </div>
 
-        {/* Border Section */}
+        {/* Border Section – with USD/TZS dual display */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="h-5 w-5 text-primary" />
@@ -343,17 +348,59 @@ function FinancePage() {
             <span className="text-xs text-muted-foreground">Cross‑border freight (USD/TZS)</span>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-            <KPI icon={<DollarSign className="h-4 w-4" />} label="Revenue" value={fmtUSD(view.border.revenueUsd)} sub={fmtTZS(view.border.revenueTzs)} tone="primary" />
-            <KPI icon={<TrendingDown className="h-4 w-4" />} label="Expenses" value={fmtTZS(view.border.expensesTzs)} sub="Verified" tone="warning" />
-            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Profit" value={fmtTZS(view.border.profitTzs)} sub="Revenue − expenses" tone={view.border.profitTzs >= 0 ? "success" : "destructive"} />
-            <KPI icon={<Users className="h-4 w-4" />} label="Salary" value={fmtTZS(view.border.salary)} sub="Border drivers" tone="accent" />
-            <KPI icon={<Wrench className="h-4 w-4" />} label="Maintenance" value={fmtTZS(view.border.maintenance)} sub="Border maintenance" tone="accent" />
-            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net Profit" value={fmtTZS(view.border.netProfit)} sub="After salary & maintenance" tone={view.border.netProfit >= 0 ? "success" : "destructive"} />
-            <KPI icon={<Wallet className="h-4 w-4" />} label="Outstanding Adv." value={fmtTZS(view.border.outstandingAdv)} sub="Advance − spent" tone="warning" />
+            <KPI
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Revenue"
+              value={fmtUSD(view.border.revenueUsd)}
+              sub={fmtTZS(view.border.revenueTzs)}
+              tone="primary"
+            />
+            <KPI
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Expenses"
+              value={fmtTZS(view.border.expensesTzs)}
+              sub={asUsd(view.border.expensesTzs)}
+              tone="warning"
+            />
+            <KPI
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Profit"
+              value={fmtTZS(view.border.profitTzs)}
+              sub={asUsd(view.border.profitTzs)}
+              tone={view.border.profitTzs >= 0 ? "success" : "destructive"}
+            />
+            <KPI
+              icon={<Users className="h-4 w-4" />}
+              label="Salary"
+              value={fmtTZS(view.border.salary)}
+              sub={asUsd(view.border.salary)}
+              tone="accent"
+            />
+            <KPI
+              icon={<Wrench className="h-4 w-4" />}
+              label="Maintenance"
+              value={fmtTZS(view.border.maintenance)}
+              sub={asUsd(view.border.maintenance)}
+              tone="accent"
+            />
+            <KPI
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Net Profit"
+              value={fmtTZS(view.border.netProfit)}
+              sub={asUsd(view.border.netProfit)}
+              tone={view.border.netProfit >= 0 ? "success" : "destructive"}
+            />
+            <KPI
+              icon={<Wallet className="h-4 w-4" />}
+              label="Outstanding Adv."
+              value={fmtTZS(view.border.outstandingAdv)}
+              sub={asUsd(view.border.outstandingAdv)}
+              tone="warning"
+            />
           </div>
         </div>
 
-        {/* Local Section */}
+        {/* Local Section – TZS only */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
             <FileText className="h-5 w-5 text-primary" />
