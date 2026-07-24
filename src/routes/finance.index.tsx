@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Download, DollarSign, TrendingDown, TrendingUp, Wallet, Users, FileText, Wrench, Truck } from "lucide-react";
+import { Download, DollarSign, TrendingDown, TrendingUp, Wallet, Users, FileText, Wrench, Truck, Bug } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -26,21 +26,19 @@ function FinancePage() {
   const { data, isLoading } = useQuery(financeOverviewQuery);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [showDebug, setShowDebug] = useState(false);
 
   const view = useMemo(() => {
-    // Early exit if data is missing or not in expected shape
     if (!data) return null;
     if (!data.border || !data.local) return null;
     if (!Array.isArray(data.border.trips) || !Array.isArray(data.local.trips)) return null;
 
-    // Ensure all arrays are defined
     const borderTrips = data.border.trips ?? [];
     const localTrips = data.local.trips ?? [];
     const financials = data.financials ?? [];
     const expenses = data.expenses ?? [];
     const payments = data.payments ?? [];
     const contracts = data.contracts ?? [];
-    const drivers = data.drivers ?? [];
 
     const inRange = (d: string | null) => {
       if (!d) return true;
@@ -49,7 +47,6 @@ function FinancePage() {
       return true;
     };
 
-    // Filter trips by date
     const filteredBorderTrips = borderTrips.filter((t) => inRange(t.dispatch_date));
     const filteredLocalTrips = localTrips.filter((t) => inRange(t.dispatch_date));
 
@@ -87,7 +84,7 @@ function FinancePage() {
     const localMaintenance = data.local.maintenance ?? 0;
     const localNetProfit = localProfitTzs - localSalary - localMaintenance;
 
-    // Shared metrics
+    // Shared
     const salary = pays.filter((p) => p.payment_type === "Salary").reduce((s, p) => s + Number(p.amount_tzs), 0);
     const activeContracts = contracts.filter((c) => c.status === "Active").length;
     const totalMaintenance = borderMaintenance + localMaintenance;
@@ -237,6 +234,9 @@ function FinancePage() {
           <h1 className="text-xl font-bold tracking-tight">Finance &amp; Reports</h1>
           <p className="text-xs text-muted-foreground">Border (USD/TZS) and Local (TZS) operations.</p>
         </div>
+        <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="gap-2">
+          <Bug className="h-4 w-4" /> {showDebug ? "Hide" : "Show"} Debug
+        </Button>
       </div>
 
       <main className="mx-auto max-w-[1400px] px-4 md:px-6 py-6">
@@ -307,6 +307,29 @@ function FinancePage() {
           <TabsContent value="revenue"><ReportTable name="revenue" rows={revenueRep} /></TabsContent>
           <TabsContent value="expense"><ReportTable name="expense" rows={expenseRep} /></TabsContent>
         </Tabs>
+
+        {/* Debug panel */}
+        {showDebug && (
+          <div className="mt-8 rounded-xl border bg-card p-4 overflow-auto max-h-96">
+            <h3 className="text-sm font-semibold mb-2">Debug Data</h3>
+            <pre className="text-xs whitespace-pre-wrap">
+              {JSON.stringify({
+                borderTrips: view.border.trips.length,
+                borderRevenueTzs: view.border.revenueTzs,
+                borderRevenueUsd: view.border.revenueUsd,
+                borderExpenses: view.border.expensesTzs,
+                borderProfit: view.border.profitTzs,
+                localTrips: view.local.trips.length,
+                localRevenueTzs: view.local.revenueTzs,
+                localExpenses: view.local.expensesTzs,
+                localProfit: view.local.profitTzs,
+                salaries: view.salary,
+                maintenance: view.totalMaintenance,
+                rawData: data,
+              }, null, 2)}
+            </pre>
+          </div>
+        )}
       </main>
     </div>
   );
