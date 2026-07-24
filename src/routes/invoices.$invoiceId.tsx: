@@ -88,12 +88,21 @@ function InvoiceDetailPage() {
   return (
     <div className="min-h-screen bg-background">
       <style>{`
-        /* Print styles – preserve colors and layout */
+        /* Print styles – hide URL, title, and browser header */
+        @page {
+          margin: 0.5cm;
+          size: A4;
+        }
+
         @media print {
           body {
             background: white !important;
             margin: 0;
             padding: 0;
+          }
+          /* Hide the page title and URL from the browser's print header */
+          head, title, link, meta, style {
+            display: none !important;
           }
           .print-hidden {
             display: none !important;
@@ -121,9 +130,6 @@ function InvoiceDetailPage() {
           }
           .invoice-container .text-gold {
             color: #FFBA09 !important;
-          }
-          .invoice-container .bg-white {
-            background: white !important;
           }
           .invoice-container table {
             width: 100% !important;
