@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { Driver } from "@/lib/queries";
 
@@ -31,6 +32,7 @@ export function NewDriverDialog({ initialData, trigger, onSuccess }: NewDriverDi
   const [license, setLicense] = useState("");
   const [monthlySalary, setMonthlySalary] = useState("");
   const [baseLocation, setBaseLocation] = useState("");
+  const [driverType, setDriverType] = useState<"border" | "local" | "both">("both");
 
   useEffect(() => {
     if (initialData) {
@@ -39,6 +41,7 @@ export function NewDriverDialog({ initialData, trigger, onSuccess }: NewDriverDi
       setLicense(initialData.license_number ?? "");
       setMonthlySalary(String(initialData.monthly_salary_tzs || 0));
       setBaseLocation(initialData.base_location ?? "");
+      setDriverType((initialData.driver_type as "border" | "local" | "both") || "both");
     }
   }, [initialData]);
 
@@ -49,6 +52,7 @@ export function NewDriverDialog({ initialData, trigger, onSuccess }: NewDriverDi
       setLicense("");
       setMonthlySalary("0");
       setBaseLocation("");
+      setDriverType("both");
     }
   };
 
@@ -60,6 +64,7 @@ export function NewDriverDialog({ initialData, trigger, onSuccess }: NewDriverDi
         license_number: license.trim() || null,
         monthly_salary_tzs: Number(monthlySalary || 0),
         base_location: baseLocation.trim() || null,
+        driver_type: driverType,
       };
       if (initialData?.id) {
         const { error } = await supabase
@@ -77,6 +82,7 @@ export function NewDriverDialog({ initialData, trigger, onSuccess }: NewDriverDi
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["drivers"] });
       qc.invalidateQueries({ queryKey: ["drivers", "overview"] });
+      qc.invalidateQueries({ queryKey: ["finance", "overview"] });
       if (initialData?.id) {
         qc.invalidateQueries({ queryKey: ["driver", initialData.id] });
       }
@@ -139,6 +145,20 @@ export function NewDriverDialog({ initialData, trigger, onSuccess }: NewDriverDi
               <Label>Base location</Label>
               <Input value={baseLocation} onChange={(e) => setBaseLocation(e.target.value)} placeholder="Dar es Salaam" />
             </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Driver type</Label>
+            <Select value={driverType} onValueChange={(v) => setDriverType(v as "border" | "local" | "both")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="border">Border</SelectItem>
+                <SelectItem value="local">Local</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Determines how driver salary is allocated in finance reports.
+            </p>
           </div>
         </div>
         <DialogFooter>
