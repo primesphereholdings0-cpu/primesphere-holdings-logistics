@@ -19,6 +19,7 @@ import { tripsQuery } from "@/lib/queries";
 import { fmtNum, fmtTZS, fmtUSD } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { companySettingsQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
   component: DashboardPage,
@@ -28,13 +29,16 @@ type Filter = "all" | "in-transit" | "pending" | "completed";
 
 function DashboardPage() {
   const { data: trips = [], isLoading } = useQuery(tripsQuery);
+  const { data: settings } = useQuery(companySettingsQuery);
+  const defaultFxRate = settings?.default_fx_rate || 2600;
   const [filter, setFilter] = useState<Filter>("all");
 
   const metrics = useMemo(() => {
     const inTransit = trips.filter((t) => t.status === "In-Transit" || t.status === "Dispatched").length;
-    const revenueUsd = trips.reduce((s, t) => s + Number(t.financial?.contract_amount ?? 0), 0);
+    // Use total_contract_tzs for all trips (already in TZS)
+    const revenueTzs = trips.reduce((s, t) => s + Number(t.financial?.total_contract_tzs ?? 0), 0);
     const cashTzs = trips.reduce((s, t) => s + Number(t.financial?.advance_paid_tzs ?? 0), 0);
-    return { inTransit, revenueUsd, cashTzs };
+    return { inTransit, revenueTzs, cashTzs };
   }, [trips]);
 
   const { data: fuelLiters = 0 } = useQuery({
@@ -55,6 +59,9 @@ function DashboardPage() {
     if (filter === "completed") return t.status === "Completed" || t.status === "Audited";
     return true;
   });
+
+  // Helper to format USD equivalent
+  const asUsd = (tzs: number) => `≈ ${fmtUSD(tzs / defaultFxRate)}`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -83,9 +90,9 @@ function DashboardPage() {
             />
             <MetricCard
               icon={<DollarSign className="h-5 w-5" />}
-              label="Total revenue locked"
-              value={fmtUSD(metrics.revenueUsd)}
-              hint="Across all contracted trips"
+              label="Total revenue"
+              value={fmtTZS(metrics.revenueTzs)}
+              hint={`${asUsd(metrics.revenueTzs)}`}
               tone="success"
             />
             <MetricCard
@@ -153,6 +160,7 @@ function DashboardPage() {
                   const cashRemaining = advanceTzs - t.expenses_sum;
                   const margin = contractTzs - t.expenses_sum;
                   const marginPct = contractTzs ? (margin / contractTzs) * 100 : 0;
+                  const isLocal = t.trip_type === "local";
                   return (
                     <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30 transition">
                       <td className="px-4 py-3 font-mono text-xs">{t.trip_code}</td>
@@ -169,7 +177,7 @@ function DashboardPage() {
                       <td className="px-4 py-3">{t.driver?.full_name ?? "—"}</td>
                       <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                       <td className="px-4 py-3 text-right tabular">
-                        {fmtUSD(t.financial?.contract_amount)}
+                        {isLocal ? fmtTZS(t.financial?.contract_amount) : fmtUSD(t.financial?.contract_amount)}
                         <div className="text-[11px] text-muted-foreground">{fmtTZS(contractTzs)}</div>
                       </td>
                       <td className="px-4 py-3 text-right tabular">{fmtTZS(advanceTzs)}</td>
