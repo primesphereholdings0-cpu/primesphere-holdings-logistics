@@ -66,12 +66,23 @@ function SettingsPage() {
 function CompanyTab() {
   const qc = useQueryClient();
   const { data } = useQuery(companySettingsQuery);
-  const [f, setF] = useState({ company_name: "", logo_url: "", address: "", phone: "", email: "" });
+  const [f, setF] = useState({
+    company_name: "",
+    logo_url: "",
+    address: "",
+    phone: "",
+    email: "",
+    tin: "", // <-- ADDED
+  });
 
   useEffect(() => {
     if (data) setF({
-      company_name: data.company_name ?? "", logo_url: data.logo_url ?? "",
-      address: data.address ?? "", phone: data.phone ?? "", email: data.email ?? "",
+      company_name: data.company_name ?? "",
+      logo_url: data.logo_url ?? "",
+      address: data.address ?? "",
+      phone: data.phone ?? "",
+      email: data.email ?? "",
+      tin: data.tin ?? "", // <-- ADDED
     });
   }, [data]);
 
@@ -94,6 +105,7 @@ function CompanyTab() {
           <div className="grid gap-1.5"><Label>Phone</Label><Input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
           <div className="grid gap-1.5"><Label>Email</Label><Input value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></div>
         </div>
+        <div className="grid gap-1.5"><Label>TIN</Label><Input value={f.tin} onChange={(e) => setF({ ...f, tin: e.target.value })} /></div> {/* <-- ADDED */}
         <div className="grid gap-1.5"><Label>Address</Label><Textarea rows={2} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></div>
         <div><Button onClick={() => save.mutate()} disabled={save.isPending} className="gap-2"><Save className="h-4 w-4" />Save</Button></div>
       </div>
