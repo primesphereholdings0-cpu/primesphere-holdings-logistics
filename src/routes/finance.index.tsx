@@ -23,12 +23,14 @@ export const Route = createFileRoute("/finance/")({
 });
 
 function FinancePage() {
-  const { data } = useQuery(financeOverviewQuery);
+  const { data, isLoading } = useQuery(financeOverviewQuery);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
   const view = useMemo(() => {
     if (!data) return null;
+    if (!data.border || !data.local) return null;
+
     const inRange = (d: string | null) => {
       if (!d) return true;
       if (from && d < from) return false;
@@ -36,17 +38,10 @@ function FinancePage() {
       return true;
     };
 
-    // Use data directly – it already has separate border/local objects
-    const border = data.border;
-    const local = data.local;
+    // Filter trips by date range
+    const filteredBorderTrips = data.border.trips.filter((t) => inRange(t.dispatch_date));
+    const filteredLocalTrips = data.local.trips.filter((t) => inRange(t.dispatch_date));
 
-    // Filter trips by date range if needed (the query already filters? No, we need to apply date filters here as well)
-    // We'll filter trips inside each object, but they are already filtered in the query? 
-    // The query doesn't accept date params, so we filter here.
-    const filteredBorderTrips = border.trips.filter((t) => inRange(t.dispatch_date));
-    const filteredLocalTrips = local.trips.filter((t) => inRange(t.dispatch_date));
-
-    // Recalculate based on filtered trips
     const borderTripIds = new Set(filteredBorderTrips.map((t) => t.id));
     const localTripIds = new Set(filteredLocalTrips.map((t) => t.id));
 
@@ -56,10 +51,10 @@ function FinancePage() {
     const borderExps = data.expenses.filter((e) => borderTripIds.has(e.trip_id));
     const localExps = data.expenses.filter((e) => localTripIds.has(e.trip_id));
 
-    // We also need to filter payments by date
+    // Payments filtered by date
     const pays = data.payments.filter((p) => inRange(p.payment_date));
 
-    // Recalculate metrics for border and local
+    // Recalculate border metrics
     const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
     const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
     const borderExpensesTzs = borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
@@ -67,22 +62,20 @@ function FinancePage() {
     const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
       borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
 
-    // Salary and maintenance for border (we can use the precomputed from data, but we need to filter drivers by type?)
-    // The query already splits salary based on driver_type and maintenance based on trip_type, but we need to filter by date? 
-    // Salary and maintenance are not date-sensitive in the query, so we keep them as is.
-    const borderSalary = data.border.salary; // already computed
-    const borderMaintenance = data.border.maintenance; // already computed
+    // Use precomputed salary and maintenance (they are already split by driver_type/trip_type in the query)
+    const borderSalary = data.border.salary || 0;
+    const borderMaintenance = data.border.maintenance || 0;
     const borderNetProfit = borderProfitTzs - borderSalary - borderMaintenance;
 
-    // Local
+    // Recalculate local metrics
     const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
     const localExpensesTzs = localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
     const localProfitTzs = localRevenueTzs - localExpensesTzs;
     const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
       localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
 
-    const localSalary = data.local.salary;
-    const localMaintenance = data.local.maintenance;
+    const localSalary = data.local.salary || 0;
+    const localMaintenance = data.local.maintenance || 0;
     const localNetProfit = localProfitTzs - localSalary - localMaintenance;
 
     // Shared
@@ -123,7 +116,24 @@ function FinancePage() {
     };
   }, [data, from, to]);
 
-  if (!data || !view) return <div className="min-h-screen bg-background"><div className="p-10 text-muted-foreground">Loading…</div></div>;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="flex items-center justify-center h-[60vh] text-muted-foreground">Loading finance data…</div>
+      </div>
+    );
+  }
+
+  if (!data || !view) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <p className="text-muted-foreground">No finance data available.</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
   const driverMap = new Map(data.drivers.map((d) => [d.id, d.full_name]));
 
@@ -159,11 +169,11 @@ function FinancePage() {
     };
   });
 
-  // Driver advance report – using all trips (border + local) because advances can be on any trip
   const allTrips = [...view.border.trips, ...view.local.trips];
   const allFins = [...view.border.fins, ...view.local.fins];
   const allExps = [...view.border.exps, ...view.local.exps];
 
+  // Driver advance report
   const advanceRep = data.drivers.map((d) => {
     const dtrips = allTrips.filter((t) => t.driver_id === d.id);
     const adv = dtrips.reduce((s, t) => s + Number(allFins.find((f) => f.trip_id === t.id)?.advance_paid_tzs ?? 0), 0);
@@ -171,7 +181,7 @@ function FinancePage() {
     return { driver: d.full_name, trips: dtrips.length, advance_tzs: adv, spent_tzs: spent, outstanding_tzs: adv - spent };
   });
 
-  // Salary report – all drivers
+  // Salary report
   const salaryRep = data.drivers.map((d) => {
     const paid = (view.pays || [])
       .filter((p) => p.driver_id === d.id && p.payment_type === "Salary")
