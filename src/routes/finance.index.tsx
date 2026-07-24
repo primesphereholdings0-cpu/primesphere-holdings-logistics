@@ -24,53 +24,44 @@ export const Route = createFileRoute("/finance/")({
 });
 
 function FinancePage() {
-  // Fetch company settings for exchange rate
   const { data: settings } = useQuery(companySettingsQuery);
   const defaultFxRate = settings?.default_fx_rate || 2600;
 
-  // Direct Supabase query for finance data
   const { data, isLoading, error } = useQuery({
     queryKey: ["finance-direct"],
     queryFn: async () => {
-      // Fetch all trips with trip_type
       const { data: trips, error: tErr } = await supabase
         .from("trips")
         .select("id, trip_code, trip_type, dispatch_date, planned_km, status, driver_id, vehicle_id, customer_id");
       if (tErr) throw tErr;
 
-      // Fetch financials
       const { data: fins, error: fErr } = await supabase
         .from("trip_financials")
         .select("trip_id, contract_amount, total_contract_tzs, fx_exchange_rate, advance_paid_tzs");
       if (fErr) throw fErr;
 
-      // Fetch expenses (only Verified)
       const { data: exps, error: eErr } = await supabase
         .from("trip_expenses")
         .select("trip_id, amount_tzs, status, category, volume_liters, created_at, description")
         .eq("status", "Verified");
       if (eErr) throw eErr;
 
-      // Fetch driver payments for salary
       const { data: pays, error: pErr } = await supabase
         .from("driver_payments")
         .select("driver_id, amount_tzs, payment_type, payment_date");
       if (pErr) throw pErr;
 
-      // Fetch drivers for salary breakdown
       const { data: drivers, error: dErr } = await supabase
         .from("drivers")
         .select("id, full_name, driver_type, monthly_salary_tzs");
       if (dErr) throw dErr;
 
-      // Fetch maintenance
       const { data: maintenance, error: mErr } = await supabase
         .from("vehicle_maintenance")
         .select("cost_tzs, status, trip_type")
         .eq("status", "Completed");
       if (mErr) throw mErr;
 
-      // Separate border/local trips
       const borderTrips = trips.filter(t => t.trip_type === 'border');
       const localTrips = trips.filter(t => t.trip_type === 'local');
 
@@ -83,20 +74,17 @@ function FinancePage() {
       const borderExps = exps.filter(e => borderIds.has(e.trip_id));
       const localExps = exps.filter(e => localIds.has(e.trip_id));
 
-      // Border metrics
       const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
       const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
       const borderExpensesTzs = borderExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
       const borderProfitTzs = borderRevenueTzs - borderExpensesTzs;
       const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - borderExpensesTzs;
 
-      // Local metrics
       const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
       const localExpensesTzs = localExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
       const localProfitTzs = localRevenueTzs - localExpensesTzs;
       const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - localExpensesTzs;
 
-      // Salary split by driver_type
       const driverTypeMap = new Map(drivers.map(d => [d.id, d.driver_type || 'both']));
       const borderDrivers = drivers.filter(d => driverTypeMap.get(d.id) === 'border' || driverTypeMap.get(d.id) === 'both');
       const localDrivers = drivers.filter(d => driverTypeMap.get(d.id) === 'local' || driverTypeMap.get(d.id) === 'both');
@@ -108,7 +96,6 @@ function FinancePage() {
         .filter(p => p.payment_type === 'Salary' && localDrivers.some(d => d.id === p.driver_id))
         .reduce((s, p) => s + Number(p.amount_tzs), 0);
 
-      // Maintenance split
       const borderMaintenance = maintenance
         .filter(m => m.trip_type === 'border' || m.trip_type === 'both')
         .reduce((s, m) => s + Number(m.cost_tzs), 0);
@@ -116,15 +103,13 @@ function FinancePage() {
         .filter(m => m.trip_type === 'local' || m.trip_type === 'both')
         .reduce((s, m) => s + Number(m.cost_tzs), 0);
 
-      // Net profits
       const borderNetProfit = borderProfitTzs - borderSalary - borderMaintenance;
       const localNetProfit = localProfitTzs - localSalary - localMaintenance;
 
-      // Shared
       const totalSalary = borderSalary + localSalary;
       const totalMaintenance = borderMaintenance + localMaintenance;
+      const totalNetProfit = borderNetProfit + localNetProfit;
 
-      // Active contracts (simple count)
       const { count: activeContracts } = await supabase
         .from('contracts')
         .select('*', { count: 'exact', head: true })
@@ -158,6 +143,7 @@ function FinancePage() {
         },
         totalSalary,
         totalMaintenance,
+        totalNetProfit,
         activeContracts: activeContracts || 0,
         allTrips: trips,
         allFins: fins,
@@ -171,7 +157,6 @@ function FinancePage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  // Filter trips by date
   const view = useMemo(() => {
     if (!data) return null;
 
@@ -196,7 +181,6 @@ function FinancePage() {
     const borderExps = data.allExps.filter(e => borderIds.has(e.trip_id));
     const localExps = data.allExps.filter(e => localIds.has(e.trip_id));
 
-    // Recalculate numbers
     const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
     const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs || 0), 0);
     const borderExpensesTzs = borderExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
@@ -207,6 +191,10 @@ function FinancePage() {
     const localExpensesTzs = localExps.reduce((s, e) => s + Number(e.amount_tzs), 0);
     const localProfitTzs = localRevenueTzs - localExpensesTzs;
     const localOutstandingAdv = localFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) - localExpensesTzs;
+
+    // Recalculate net profits with filtered numbers
+    const borderNetProfit = borderProfitTzs - data.border.salary - data.border.maintenance;
+    const localNetProfit = localProfitTzs - data.local.salary - data.local.maintenance;
 
     return {
       border: {
@@ -220,7 +208,7 @@ function FinancePage() {
         outstandingAdv: borderOutstandingAdv,
         salary: data.border.salary,
         maintenance: data.border.maintenance,
-        netProfit: borderProfitTzs - data.border.salary - data.border.maintenance,
+        netProfit: borderNetProfit,
       },
       local: {
         trips: localTripsF,
@@ -232,7 +220,7 @@ function FinancePage() {
         outstandingAdv: localOutstandingAdv,
         salary: data.local.salary,
         maintenance: data.local.maintenance,
-        netProfit: localProfitTzs - data.local.salary - data.local.maintenance,
+        netProfit: localNetProfit,
       },
     };
   }, [data, from, to]);
@@ -241,12 +229,10 @@ function FinancePage() {
   if (error) return <div className="min-h-screen bg-background p-6 text-destructive">Error: {error.message}</div>;
   if (!data || !view) return <div className="min-h-screen bg-background p-6">No finance data available.</div>;
 
-  // Helper to format USD equivalent using defaultFxRate
   const asUsd = (tzs: number) => `≈ ${fmtUSD(tzs / defaultFxRate)}`;
 
   const driverMap = new Map((data.drivers ?? []).map((d) => [d.id, d.full_name]));
 
-  // Reports
   const allTrips = [...view.border.trips, ...view.local.trips];
   const allFins = [...view.border.fins, ...view.local.fins];
   const allExps = [...view.border.exps, ...view.local.exps];
@@ -340,7 +326,7 @@ function FinancePage() {
           <Button variant="ghost" size="sm" onClick={() => { setFrom(""); setTo(""); }}>Reset</Button>
         </div>
 
-        {/* Border Section – with USD/TZS dual display */}
+        {/* Border Section */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="h-5 w-5 text-primary" />
@@ -348,59 +334,17 @@ function FinancePage() {
             <span className="text-xs text-muted-foreground">Cross‑border freight (USD/TZS)</span>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-            <KPI
-              icon={<DollarSign className="h-4 w-4" />}
-              label="Revenue"
-              value={fmtUSD(view.border.revenueUsd)}
-              sub={fmtTZS(view.border.revenueTzs)}
-              tone="primary"
-            />
-            <KPI
-              icon={<TrendingDown className="h-4 w-4" />}
-              label="Expenses"
-              value={fmtTZS(view.border.expensesTzs)}
-              sub={asUsd(view.border.expensesTzs)}
-              tone="warning"
-            />
-            <KPI
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Profit"
-              value={fmtTZS(view.border.profitTzs)}
-              sub={asUsd(view.border.profitTzs)}
-              tone={view.border.profitTzs >= 0 ? "success" : "destructive"}
-            />
-            <KPI
-              icon={<Users className="h-4 w-4" />}
-              label="Salary"
-              value={fmtTZS(view.border.salary)}
-              sub={asUsd(view.border.salary)}
-              tone="accent"
-            />
-            <KPI
-              icon={<Wrench className="h-4 w-4" />}
-              label="Maintenance"
-              value={fmtTZS(view.border.maintenance)}
-              sub={asUsd(view.border.maintenance)}
-              tone="accent"
-            />
-            <KPI
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Net Profit"
-              value={fmtTZS(view.border.netProfit)}
-              sub={asUsd(view.border.netProfit)}
-              tone={view.border.netProfit >= 0 ? "success" : "destructive"}
-            />
-            <KPI
-              icon={<Wallet className="h-4 w-4" />}
-              label="Outstanding Adv."
-              value={fmtTZS(view.border.outstandingAdv)}
-              sub={asUsd(view.border.outstandingAdv)}
-              tone="warning"
-            />
+            <KPI icon={<DollarSign className="h-4 w-4" />} label="Revenue" value={fmtUSD(view.border.revenueUsd)} sub={fmtTZS(view.border.revenueTzs)} tone="primary" />
+            <KPI icon={<TrendingDown className="h-4 w-4" />} label="Expenses" value={fmtTZS(view.border.expensesTzs)} sub={asUsd(view.border.expensesTzs)} tone="warning" />
+            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Profit" value={fmtTZS(view.border.profitTzs)} sub={asUsd(view.border.profitTzs)} tone={view.border.profitTzs >= 0 ? "success" : "destructive"} />
+            <KPI icon={<Users className="h-4 w-4" />} label="Salary" value={fmtTZS(view.border.salary)} sub={asUsd(view.border.salary)} tone="accent" />
+            <KPI icon={<Wrench className="h-4 w-4" />} label="Maintenance" value={fmtTZS(view.border.maintenance)} sub={asUsd(view.border.maintenance)} tone="accent" />
+            <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net Profit" value={fmtTZS(view.border.netProfit)} sub={asUsd(view.border.netProfit)} tone={view.border.netProfit >= 0 ? "success" : "destructive"} />
+            <KPI icon={<Wallet className="h-4 w-4" />} label="Outstanding Adv." value={fmtTZS(view.border.outstandingAdv)} sub={asUsd(view.border.outstandingAdv)} tone="warning" />
           </div>
         </div>
 
-        {/* Local Section – TZS only */}
+        {/* Local Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
             <FileText className="h-5 w-5 text-primary" />
@@ -418,11 +362,11 @@ function FinancePage() {
           </div>
         </div>
 
-        {/* Shared KPIs */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+        {/* Shared KPIs – now with Total Net Profit instead of Total Maintenance */}
+        <div className="grid gap-3 sm:grid-cols-3 mb-8">
           <KPI icon={<Users className="h-4 w-4" />} label="Total Salary" value={fmtTZS(data.totalSalary)} sub="All drivers" tone="accent" />
-          <KPI icon={<FileText className="h-4 w-4" />} label="Active contracts" value={String(data.activeContracts)} sub="Signed & running" tone="primary" />
-          <KPI icon={<Wrench className="h-4 w-4" />} label="Total maintenance" value={fmtTZS(data.totalMaintenance)} sub="All completed jobs" tone="accent" />
+          <KPI icon={<FileText className="h-4 w-4" />} label="Active Contracts" value={String(data.activeContracts)} sub="Signed & running" tone="primary" />
+          <KPI icon={<TrendingUp className="h-4 w-4" />} label="Total Net Profit" value={fmtTZS(data.totalNetProfit)} sub="Border + Local" tone="success" />
         </div>
 
         <Tabs defaultValue="border">
