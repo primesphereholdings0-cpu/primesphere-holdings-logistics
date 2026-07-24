@@ -17,7 +17,7 @@ export const Route = createFileRoute("/finance/")({
   head: () => ({
     meta: [
       { title: "Finance & Reports — Primesphere Holdings Logistics" },
-      { name: "description", content: "Executive finance dashboard, profitability and payroll reports." },
+      { name: "description", content: "Local operations finance dashboard – revenue, expenses, and profitability." },
     ],
   }),
 });
@@ -35,7 +35,8 @@ function FinancePage() {
       if (to && d > to) return false;
       return true;
     };
-    const trips = data.trips.filter((t) => inRange(t.dispatch_date));
+    // 🔥 FILTER: only local trips
+    const trips = data.trips.filter((t) => inRange(t.dispatch_date) && t.trip_type === "local");
     const tripIds = new Set(trips.map((t) => t.id));
     const fins = data.financials.filter((f) => tripIds.has(f.trip_id));
     const exps = data.expenses.filter((e) => tripIds.has(e.trip_id));
@@ -53,7 +54,6 @@ function FinancePage() {
     const maintenanceCost = data.maintenanceCost ?? 0;
     const profitAfterMaintenance = profitTzs - maintenanceCost;
 
-    // We no longer need monthly chart data
     return { trips, fins, exps, pays, revenueTzs, revenueUsd, expensesTzs, profitTzs, outstandingAdv, salary, activeContracts, maintenanceCost, profitAfterMaintenance };
   }, [data, from, to]);
 
@@ -107,7 +107,7 @@ function FinancePage() {
       <div className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-xl px-4 py-3 md:px-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Finance &amp; Reports</h1>
-          <p className="text-xs text-muted-foreground">Executive dashboard with live profitability, payroll and fuel reports.</p>
+          <p className="text-xs text-muted-foreground">Local operations – revenue, expenses, and profitability.</p>
         </div>
       </div>
 
@@ -120,29 +120,29 @@ function FinancePage() {
 
         {/* Main KPI row */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 mb-8">
-          <KPI icon={<DollarSign className="h-4 w-4" />} label="Total revenue" value={fmtTZS(view.revenueTzs)} sub={fmtUSD(view.revenueUsd)} tone="primary" />
-          <KPI icon={<TrendingDown className="h-4 w-4" />} label="Trip expenses" value={fmtTZS(view.expensesTzs)} sub="Verified only" tone="warning" />
-          <KPI icon={<TrendingUp className="h-4 w-4" />} label="Trip profit" value={fmtTZS(view.profitTzs)} sub="Revenue − expenses" tone={view.profitTzs >= 0 ? "success" : "destructive"} />
+          <KPI icon={<DollarSign className="h-4 w-4" />} label="Local revenue" value={fmtTZS(view.revenueTzs)} sub={fmtUSD(view.revenueUsd)} tone="primary" />
+          <KPI icon={<TrendingDown className="h-4 w-4" />} label="Local expenses" value={fmtTZS(view.expensesTzs)} sub="Verified only" tone="warning" />
+          <KPI icon={<TrendingUp className="h-4 w-4" />} label="Local profit" value={fmtTZS(view.profitTzs)} sub="Revenue − expenses" tone={view.profitTzs >= 0 ? "success" : "destructive"} />
           <KPI icon={<Wrench className="h-4 w-4" />} label="Fleet maintenance" value={fmtTZS(view.maintenanceCost)} sub="Completed jobs" tone="accent" />
           <KPI icon={<TrendingUp className="h-4 w-4" />} label="Net profit" value={fmtTZS(view.profitAfterMaintenance)} sub="Profit − maintenance" tone={view.profitAfterMaintenance >= 0 ? "success" : "destructive"} />
           <KPI icon={<Wallet className="h-4 w-4" />} label="Outstanding advances" value={fmtTZS(view.outstandingAdv)} sub="Advance − spent" tone="warning" />
           <KPI icon={<Users className="h-4 w-4" />} label="Salary costs" value={fmtTZS(view.salary)} sub="Payments in range" tone="accent" />
         </div>
 
-        {/* Local Report Cards – replaces the charts */}
+        {/* Local Report Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
           <ReportCard
             icon={<DollarSign className="h-5 w-5" />}
             label="Revenue"
             value={fmtTZS(view.revenueTzs)}
-            sub="Total income"
+            sub="Local trips"
             tone="primary"
           />
           <ReportCard
             icon={<TrendingDown className="h-5 w-5" />}
             label="Expenses"
             value={fmtTZS(view.expensesTzs)}
-            sub="Verified trip expenses"
+            sub="Local trip expenses"
             tone="warning"
           />
           <ReportCard
@@ -170,12 +170,12 @@ function FinancePage() {
             <TabsTrigger value="revenue">Revenue</TabsTrigger>
             <TabsTrigger value="expense">Expense</TabsTrigger>
           </TabsList>
-          <TabsContent value="profit"><ReportTable name="trip-profitability" rows={profitability} /></TabsContent>
-          <TabsContent value="advance"><ReportTable name="driver-advance" rows={advanceRep} /></TabsContent>
+          <TabsContent value="profit"><ReportTable name="local-trip-profitability" rows={profitability} /></TabsContent>
+          <TabsContent value="advance"><ReportTable name="local-driver-advance" rows={advanceRep} /></TabsContent>
           <TabsContent value="salary"><ReportTable name="driver-salary" rows={salaryRep} /></TabsContent>
-          <TabsContent value="fuel"><ReportTable name="fuel-consumption" rows={fuelRep} /></TabsContent>
-          <TabsContent value="revenue"><ReportTable name="revenue" rows={revenueRep} /></TabsContent>
-          <TabsContent value="expense"><ReportTable name="expense" rows={expenseRep} /></TabsContent>
+          <TabsContent value="fuel"><ReportTable name="local-fuel-consumption" rows={fuelRep} /></TabsContent>
+          <TabsContent value="revenue"><ReportTable name="local-revenue" rows={revenueRep} /></TabsContent>
+          <TabsContent value="expense"><ReportTable name="local-expense" rows={expenseRep} /></TabsContent>
         </Tabs>
       </main>
     </div>
@@ -200,7 +200,6 @@ function KPI({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: 
   );
 }
 
-// New component: ReportCard (bigger, more prominent)
 function ReportCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; label: string; value: string; sub: string; tone: "primary" | "success" | "warning" | "destructive" | "accent" }) {
   const borderMap = {
     primary: "border-primary/30",
