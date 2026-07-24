@@ -35,32 +35,32 @@ function FinancePage() {
       if (to && d > to) return false;
       return true;
     };
-    
-    // Separate border and local trips
+
     const allTrips = data.trips.filter((t) => inRange(t.dispatch_date));
     const borderTrips = allTrips.filter((t) => t.trip_type !== "local");
     const localTrips = allTrips.filter((t) => t.trip_type === "local");
-    
+
     const borderTripIds = new Set(borderTrips.map((t) => t.id));
     const localTripIds = new Set(localTrips.map((t) => t.id));
-    
+
     const borderFins = data.financials.filter((f) => borderTripIds.has(f.trip_id));
     const localFins = data.financials.filter((f) => localTripIds.has(f.trip_id));
-    
+
     const borderExps = data.expenses.filter((e) => borderTripIds.has(e.trip_id));
     const localExps = data.expenses.filter((e) => localTripIds.has(e.trip_id));
-    
+
+    // Payments are shared (not separated by trip type)
     const pays = data.payments.filter((p) => inRange(p.payment_date));
 
-    // Border calculations (USD + TZS)
+    // Border
     const borderRevenueUsd = borderFins.reduce((s, f) => s + Number(f.contract_amount), 0);
     const borderRevenueTzs = borderFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
     const borderExpensesTzs = borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
     const borderProfitTzs = borderRevenueTzs - borderExpensesTzs;
     const borderOutstandingAdv = borderFins.reduce((s, f) => s + Number(f.advance_paid_tzs), 0) -
       borderExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
-    
-    // Local calculations (TZS only)
+
+    // Local
     const localRevenueTzs = localFins.reduce((s, f) => s + Number(f.total_contract_tzs ?? Number(f.contract_amount) * Number(f.fx_exchange_rate)), 0);
     const localExpensesTzs = localExps.filter((e) => e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
     const localProfitTzs = localRevenueTzs - localExpensesTzs;
@@ -96,6 +96,7 @@ function FinancePage() {
         outstandingAdv: localOutstandingAdv,
         profitAfterMaintenance: localProfitAfterMaintenance,
       },
+      pays, // <-- include pays for salary calculations
       salary,
       activeContracts,
       maintenanceCost,
@@ -106,30 +107,39 @@ function FinancePage() {
 
   const driverMap = new Map(data.drivers.map((d) => [d.id, d.full_name]));
 
-  // Border profitability report
+  // Border profitability
   const borderProfitability = view.border.trips.map((t) => {
     const f = view.border.fins.find((x) => x.trip_id === t.id);
     const rev = Number(f?.total_contract_tzs ?? 0);
     const exp = view.border.exps.filter((e) => e.trip_id === t.id && e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
     return {
-      trip_code: t.trip_code, route: t.origin_destination, status: t.status,
-      revenue_tzs: rev, expenses_tzs: exp, profit_tzs: rev - exp,
+      trip_code: t.trip_code,
+      route: t.origin_destination,
+      status: t.status,
+      revenue_tzs: rev,
+      expenses_tzs: exp,
+      profit_tzs: rev - exp,
       margin_pct: rev ? Number(((rev - exp) / rev * 100).toFixed(1)) : 0,
     };
   });
 
-  // Local profitability report
+  // Local profitability
   const localProfitability = view.local.trips.map((t) => {
     const f = view.local.fins.find((x) => x.trip_id === t.id);
     const rev = Number(f?.total_contract_tzs ?? 0);
     const exp = view.local.exps.filter((e) => e.trip_id === t.id && e.status === "Verified").reduce((s, e) => s + Number(e.amount_tzs), 0);
     return {
-      trip_code: t.trip_code, route: t.origin_destination, status: t.status,
-      revenue_tzs: rev, expenses_tzs: exp, profit_tzs: rev - exp,
+      trip_code: t.trip_code,
+      route: t.origin_destination,
+      status: t.status,
+      revenue_tzs: rev,
+      expenses_tzs: exp,
+      profit_tzs: rev - exp,
       margin_pct: rev ? Number(((rev - exp) / rev * 100).toFixed(1)) : 0,
     };
   });
 
+  // Driver advance report (based on border trips only, but can be extended)
   const advanceRep = data.drivers.map((d) => {
     const dtrips = view.border.trips.filter((t) => t.driver_id === d.id);
     const adv = dtrips.reduce((s, t) => s + Number(view.border.fins.find((f) => f.trip_id === t.id)?.advance_paid_tzs ?? 0), 0);
@@ -137,32 +147,46 @@ function FinancePage() {
     return { driver: d.full_name, trips: dtrips.length, advance_tzs: adv, spent_tzs: spent, outstanding_tzs: adv - spent };
   });
 
+  // Salary report (all drivers, all payments)
   const salaryRep = data.drivers.map((d) => {
-    const paid = view.border.trips.filter((t) => t.driver_id === d.id).length > 0 || view.local.trips.filter((t) => t.driver_id === d.id).length > 0
-      ? view.border.pays?.filter((p) => p.driver_id === d.id && p.payment_type === "Salary").reduce((s, p) => s + Number(p.amount_tzs), 0) || 0
-      : 0;
-    // Using all trips for salary
-    const allTripIds = [...view.border.trips.map(t => t.id), ...view.local.trips.map(t => t.id)];
-    const allPays = data.payments.filter((p) => p.driver_id === d.id && p.payment_type === "Salary");
-    const paid = allPays.reduce((s, p) => s + Number(p.amount_tzs), 0);
+    const paid = (view.pays || [])
+      .filter((p) => p.driver_id === d.id && p.payment_type === "Salary")
+      .reduce((s, p) => s + Number(p.amount_tzs), 0);
     return { driver: d.full_name, base_salary_tzs: d.monthly_salary_tzs, paid_tzs: paid };
   });
 
-  const fuelRep = [...view.border.exps, ...view.local.exps].filter((e) => e.category === "Fuel").map((e) => ({
-    trip_code: [...view.border.trips, ...view.local.trips].find((t) => t.id === e.trip_id)?.trip_code ?? "—",
-    driver: driverMap.get([...view.border.trips, ...view.local.trips].find((t) => t.id === e.trip_id)?.driver_id ?? "") ?? "—",
-    liters: Number(e.volume_liters ?? 0), amount_tzs: Number(e.amount_tzs), status: e.status, date: e.created_at.slice(0, 10),
+  // Fuel consumption (all trips)
+  const allTrips = [...view.border.trips, ...view.local.trips];
+  const allExps = [...view.border.exps, ...view.local.exps];
+  const fuelRep = allExps.filter((e) => e.category === "Fuel").map((e) => ({
+    trip_code: allTrips.find((t) => t.id === e.trip_id)?.trip_code ?? "—",
+    driver: driverMap.get(allTrips.find((t) => t.id === e.trip_id)?.driver_id ?? "") ?? "—",
+    liters: Number(e.volume_liters ?? 0),
+    amount_tzs: Number(e.amount_tzs),
+    status: e.status,
+    date: e.created_at.slice(0, 10),
   }));
 
-  const revenueRep = [...view.border.trips, ...view.local.trips].map((t) => {
+  // Revenue report (all trips)
+  const revenueRep = allTrips.map((t) => {
     const f = [...view.border.fins, ...view.local.fins].find((x) => x.trip_id === t.id);
-    return { trip_code: t.trip_code, dispatch_date: t.dispatch_date, route: t.origin_destination,
-      contract_usd: Number(f?.contract_amount ?? 0), contract_tzs: Number(f?.total_contract_tzs ?? 0), status: t.status };
+    return {
+      trip_code: t.trip_code,
+      dispatch_date: t.dispatch_date,
+      route: t.origin_destination,
+      contract_usd: Number(f?.contract_amount ?? 0),
+      contract_tzs: Number(f?.total_contract_tzs ?? 0),
+      status: t.status,
+    };
   });
 
-  const expenseRep = [...view.border.exps, ...view.local.exps].map((e) => ({
-    trip_code: [...view.border.trips, ...view.local.trips].find((t) => t.id === e.trip_id)?.trip_code ?? "—",
-    category: e.category, amount_tzs: Number(e.amount_tzs), status: e.status, date: e.created_at.slice(0, 10),
+  // Expense report (all trips)
+  const expenseRep = allExps.map((e) => ({
+    trip_code: allTrips.find((t) => t.id === e.trip_id)?.trip_code ?? "—",
+    category: e.category,
+    amount_tzs: Number(e.amount_tzs),
+    status: e.status,
+    date: e.created_at.slice(0, 10),
   }));
 
   return (
@@ -181,7 +205,7 @@ function FinancePage() {
           <Button variant="ghost" size="sm" onClick={() => { setFrom(""); setTo(""); }}>Reset</Button>
         </div>
 
-        {/* ===== BORDER SECTION ===== */}
+        {/* Border Section */}
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Truck className="h-5 w-5 text-primary" />
@@ -198,7 +222,7 @@ function FinancePage() {
           </div>
         </div>
 
-        {/* ===== LOCAL SECTION ===== */}
+        {/* Local Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
             <FileText className="h-5 w-5 text-primary" />
@@ -215,7 +239,7 @@ function FinancePage() {
           </div>
         </div>
 
-        {/* Shared salary & contracts */}
+        {/* Shared KPIs */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-8">
           <KPI icon={<Users className="h-4 w-4" />} label="Salary costs" value={fmtTZS(view.salary)} sub="Payments in range" tone="accent" />
           <KPI icon={<FileText className="h-4 w-4" />} label="Active contracts" value={String(view.activeContracts)} sub="Signed & running" tone="primary" />
